@@ -27,6 +27,29 @@ export interface Game {
   entry: string | null;
 }
 
+export interface StoreGame {
+  id: number;
+  gameCode: string;
+  name: string;
+  description: string;
+  coverUrl: string | null;
+  priceCents: number;
+  version: string;
+  installed: boolean;
+  installedVersion: string | null;
+}
+
+export interface InstalledGame {
+  id: number;
+  gameCode: string;
+  name: string;
+  description: string;
+  coverUrl: string | null;
+  version: string;
+  installedVersion: string;
+  status: string;
+}
+
 export interface GameResult {
   sessionNo: string;
   pointsAwarded: number;

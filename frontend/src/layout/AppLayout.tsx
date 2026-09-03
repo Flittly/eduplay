@@ -1,4 +1,4 @@
-import { LogOut, Map, Users } from "lucide-react";
+import { LogOut, Map, ShoppingBag, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import type { User } from "../types";
 
@@ -26,6 +26,16 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
           >
             <Map size={18} />
             <span>游戏中心</span>
+          </NavLink>
+
+          <NavLink
+            to="/store"
+            className={({ isActive }) =>
+              `side-link ${isActive ? "active" : ""}`
+            }
+          >
+            <ShoppingBag size={18} />
+            <span>游戏商城</span>
           </NavLink>
 
           {user.role === "TEACHER" && (

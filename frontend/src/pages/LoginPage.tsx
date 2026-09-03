@@ -1,16 +1,12 @@
 import { useState } from "react";
-import { createGuest, loginLocal, registerLocal } from "../api";
+import { loginLocal, registerLocal } from "../api";
 import type { User } from "../types";
 
 interface LoginPageProps {
   onAuthenticated: (token: string, user: User) => void;
-  onGuest: (user: User) => void;
 }
 
-export default function LoginPage({
-  onAuthenticated,
-  onGuest
-}: LoginPageProps) {
+export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,16 +31,6 @@ export default function LoginPage({
       setError(err instanceof Error ? err.message : "操作失败");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleGuest() {
-    setError("");
-    try {
-      const guest = await createGuest();
-      onGuest(guest);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "创建游客账号失败");
     }
   }
 
@@ -129,10 +115,6 @@ export default function LoginPage({
               : mode === "login"
                 ? "登录"
                 : "注册"}
-          </button>
-
-          <button className="guest-button" onClick={handleGuest}>
-            游客试玩
           </button>
         </div>
       </section>

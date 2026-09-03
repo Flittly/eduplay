@@ -4,6 +4,7 @@ import AppLayout from "./layout/AppLayout";
 import DashboardPage from "./pages/DashboardPage";
 import GamePage from "./pages/GamePage";
 import LoginPage from "./pages/LoginPage";
+import StorePage from "./pages/StorePage";
 import TeacherStudentsPage from "./pages/TeacherStudentsPage";
 import { getCurrentUser, logout } from "./api";
 import type { User } from "./types";
@@ -67,11 +68,6 @@ export default function App() {
     setUser(currentUser);
   }
 
-  function handleGuest(currentUser: User) {
-    setToken(null);
-    setUser(currentUser);
-  }
-
   function handleLogout() {
     if (token) {
       void logout(token).catch(() => undefined);
@@ -88,25 +84,29 @@ export default function App() {
           user ? (
             <Navigate to="/" replace />
           ) : (
-            <LoginPage
-              onAuthenticated={handleAuthenticated}
-              onGuest={handleGuest}
-            />
+            <LoginPage onAuthenticated={handleAuthenticated} />
           )
         }
       />
 
       <Route
         element={
-          user ? (
+          user && token ? (
             <AppLayout user={user} onLogout={handleLogout} />
           ) : (
             <Navigate to="/login" replace />
           )
         }
       >
-        <Route path="/" element={<DashboardPage user={user!} />} />
+        <Route
+          path="/"
+          element={<DashboardPage user={user!} token={token ?? ""} />}
+        />
         <Route path="/game/:gameCode" element={<GamePage user={user!} />} />
+        <Route
+          path="/store"
+          element={<StorePage token={token ?? ""} />}
+        />
         <Route
           path="/teacher/students"
           element={<TeacherStudentsPage user={user!} token={token} />}

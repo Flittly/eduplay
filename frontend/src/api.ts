@@ -3,11 +3,13 @@ import type {
   AuthResult,
   Game,
   GameResult,
+  InstalledGame,
   PointsSummary,
   Student,
   StudentPointsDetail,
   StudentPointsResponse,
   StudentImportResult,
+  StoreGame,
   User
 } from "./types";
 
@@ -169,6 +171,40 @@ export function getStudentPoints(
 
 export function listGames(): Promise<Game[]> {
   return request<Game[]>("/games");
+}
+
+export function listStoreGames(token: string): Promise<StoreGame[]> {
+  return request<StoreGame[]>("/store/games", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function listInstalledGames(token: string): Promise<InstalledGame[]> {
+  return request<InstalledGame[]>("/me/games", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function installGame(token: string, gameCode: string): Promise<StoreGame> {
+  return request<StoreGame>(`/store/games/${gameCode}/install`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function uninstallGame(token: string, gameCode: string): Promise<void> {
+  return request<void>(`/store/games/${gameCode}/uninstall`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
 }
 
 export function getGame(gameCode: string): Promise<Game> {

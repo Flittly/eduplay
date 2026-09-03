@@ -983,6 +983,67 @@ a:focus-visible {
   letter-spacing: 0.04em;
 }
 
+.store-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 250px;
+  padding: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--blue);
+  transition: transform 100ms linear, box-shadow 100ms linear;
+}
+
+.store-card:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 6px 6px 0 var(--pink), -4px -4px 0 var(--orange);
+}
+
+.store-card h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.store-card p {
+  color: var(--ink-weak);
+  line-height: 1.6;
+}
+
+.store-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding: 14px 0;
+  color: var(--ink-weak);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.full-button {
+  width: 100%;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 48px;
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--green);
+  text-align: center;
+  color: var(--ink-weak);
+}
+
+.empty-state .button-link {
+  margin-top: 14px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
