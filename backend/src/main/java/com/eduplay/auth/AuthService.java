@@ -50,6 +50,7 @@ public class AuthService {
         user.setNickname(nickname);
         user.setUserType("LOCAL");
         user.setRole(role);
+        user.setStatus("ACTIVE");
         user.setStudentNo(request.studentNo());
         user.setClassName(request.className());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -68,7 +69,27 @@ public class AuthService {
                 || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BusinessException("BAD_CREDENTIALS", "用户名或密码错误");
         }
+        if ("DISABLED".equals(user.getStatus())) {
+            throw new BusinessException("ACCOUNT_DISABLED", "账号已被禁用");
+        }
 
+        return createSession(user);
+    }
+
+    @Transactional
+    public LoginResult loginAdmin(LoginLocalRequest request) {
+        AppUser user = userRepository.findByUsername(request.username().trim())
+                .filter(item -> "ADMIN".equals(item.getUserType())
+                        && "SUPER_ADMIN".equals(item.getRole()))
+                .orElseThrow(() -> new BusinessException("BAD_CREDENTIALS", "用户名或密码错误"));
+
+        if (user.getPasswordHash() == null
+                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new BusinessException("BAD_CREDENTIALS", "用户名或密码错误");
+        }
+        if ("DISABLED".equals(user.getStatus())) {
+            throw new BusinessException("ACCOUNT_DISABLED", "管理员账号已被禁用");
+        }
         return createSession(user);
     }
 
@@ -99,6 +120,15 @@ public class AuthService {
 
         return userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new NotFoundException("用户不存在"));
+    }
+
+    @Transactional(readOnly = true)
+    public AppUser requireAdmin(String authorizationHeader) {
+        AppUser user = requireUser(authorizationHeader);
+        if (!"SUPER_ADMIN".equals(user.getRole())) {
+            throw new BusinessException("FORBIDDEN", "需要管理员权限");
+        }
+        return user;
     }
 
     private LoginResult createSession(AppUser user) {

@@ -7,7 +7,8 @@ public record UserResponse(
         String userType,
         String role,
         String studentNo,
-        String className
+        String className,
+        String status
 ) {
     public static UserResponse from(AppUser user) {
         return new UserResponse(
@@ -17,7 +18,8 @@ public record UserResponse(
                 user.getUserType(),
                 user.getRole(),
                 user.getStudentNo(),
-                user.getClassName()
+                user.getClassName(),
+                user.getStatus()
         );
     }
 }

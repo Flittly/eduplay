@@ -40,6 +40,9 @@ public class AppUser {
     @Column(nullable = false, length = 16)
     private String role = "STUDENT";
 
+    @Column(nullable = false, length = 16)
+    private String status = "ACTIVE";
+
     @Column(name = "student_no", length = 64)
     private String studentNo;
 
