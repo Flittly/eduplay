@@ -9,7 +9,7 @@ backend/logs/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.env.local
 
 .DS_Store
 Thumbs.db
-
