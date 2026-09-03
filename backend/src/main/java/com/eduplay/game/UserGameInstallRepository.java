@@ -10,5 +10,6 @@ public interface UserGameInstallRepository extends JpaRepository<UserGameInstall
     List<UserGameInstall> findByUserId(Long userId);
 
     Optional<UserGameInstall> findByUserIdAndGameId(Long userId, Long gameId);
-}
 
+    long countByGameId(Long gameId);
+}

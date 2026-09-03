@@ -42,6 +42,20 @@ public class PluginPackageService {
         return file;
     }
 
+    public Path savePackage(String packageName, byte[] bytes) {
+        try {
+            Files.createDirectories(packageDir);
+            Path file = packageDir.resolve(packageName).normalize();
+            if (!file.startsWith(packageDir)) {
+                throw new BusinessException("INVALID_PACKAGE_NAME", "插件包名称不合法");
+            }
+            Files.write(file, bytes);
+            return file;
+        } catch (IOException ex) {
+            throw new BusinessException("PACKAGE_SAVE_FAILED", "插件包保存失败");
+        }
+    }
+
     public void install(Long userId, GameProduct game, GamePackage gamePackage) {
         try {
             Path packageFile = resolvePackage(gamePackage);
@@ -154,4 +168,3 @@ public class PluginPackageService {
         }
     }
 }
-

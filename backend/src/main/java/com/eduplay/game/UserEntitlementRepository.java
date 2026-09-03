@@ -10,5 +10,6 @@ public interface UserEntitlementRepository extends JpaRepository<UserEntitlement
     List<UserEntitlement> findByUserIdAndStatus(Long userId, String status);
 
     Optional<UserEntitlement> findByUserIdAndGameId(Long userId, Long gameId);
-}
 
+    long countByGameId(Long gameId);
+}

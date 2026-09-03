@@ -12,5 +12,6 @@ public interface GamePackageRepository extends JpaRepository<GamePackage, Long> 
     Optional<GamePackage> findFirstByGameIdOrderByVersionDesc(Long gameId);
 
     List<GamePackage> findByGameIdOrderByVersionDesc(Long gameId);
-}
 
+    boolean existsByGameIdAndVersion(Long gameId, String version);
+}
