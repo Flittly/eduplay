@@ -739,6 +739,28 @@ a:focus-visible {
   text-align: center;
 }
 
+.class-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.class-tabs button {
+  padding: 8px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper-dim);
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: 2px 2px 0 var(--blue);
+}
+
+.class-tabs button.active {
+  background: var(--green);
+  box-shadow: 2px 2px 0 var(--pink);
+}
+
 .toolbar input,
 .add-student-form input {
   padding: 10px;

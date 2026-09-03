@@ -46,6 +46,13 @@ public class StudentController {
         ));
     }
 
+    @GetMapping("/classes")
+    public ApiResponse<List<String>> listClassNames(
+            @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        return ApiResponse.ok(studentService.listClassNames(authorization));
+    }
+
     @PostMapping
     public ApiResponse<StudentService.StudentResponse> addStudent(
             @RequestHeader(value = "Authorization", required = false) String authorization,

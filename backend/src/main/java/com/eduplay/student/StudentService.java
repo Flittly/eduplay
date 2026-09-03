@@ -51,11 +51,11 @@ public class StudentService {
         AppUser teacher = requireTeacher(authorizationHeader);
         List<StudentRow> rows = parseRows(file);
         List<StudentFailure> failures = new ArrayList<>();
-        Set<String> fileStudentNos = new HashSet<>();
+        Set<String> fileStudentKeys = new HashSet<>();
         List<StudentRow> validRows = new ArrayList<>();
 
         for (StudentRow row : rows) {
-            List<String> rowErrors = validateImportRow(teacher.getId(), row, fileStudentNos);
+            List<String> rowErrors = validateImportRow(teacher.getId(), row, fileStudentKeys);
             if (rowErrors.isEmpty()) {
                 validRows.add(row);
             } else {
@@ -96,6 +96,17 @@ public class StudentService {
         AppUser teacher = requireTeacher(authorizationHeader);
         return findStudents(teacher.getId(), keyword, className).stream()
                 .map(StudentResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> listClassNames(String authorizationHeader) {
+        AppUser teacher = requireTeacher(authorizationHeader);
+        return studentRepository.findByTeacherIdOrderByClassNameAscNameAsc(teacher.getId())
+                .stream()
+                .map(Student::getClassName)
+                .distinct()
+                .sorted()
                 .toList();
     }
 
@@ -174,6 +185,7 @@ public class StudentService {
         AppUser teacher = requireTeacher(authorizationHeader);
         String name = request.name().trim();
         String studentNo = request.studentNo().trim();
+        String className = normalizeClassName(request.className());
 
         if (name.isBlank()) {
             throw new BusinessException("INVALID_STUDENT_NAME", "姓名不能为空");
@@ -181,15 +193,19 @@ public class StudentService {
         if (studentNo.isBlank()) {
             throw new BusinessException("INVALID_STUDENT_NO", "学号不能为空");
         }
-        if (studentRepository.existsByTeacherIdAndStudentNo(teacher.getId(), studentNo)) {
-            throw new BusinessException("STUDENT_NO_EXISTS", "该学号已存在");
+        if (studentRepository.existsByTeacherIdAndClassNameAndStudentNo(
+                teacher.getId(),
+                className,
+                studentNo
+        )) {
+            throw new BusinessException("STUDENT_NO_EXISTS", "该班级下学号已存在");
         }
 
         Student student = createStudent(
                 teacher.getId(),
                 name,
                 studentNo,
-                request.className(),
+                className,
                 request.initialPoints() == null ? 0 : request.initialPoints(),
                 "STUDENT_MANUAL_ADD"
         );
@@ -296,7 +312,7 @@ public class StudentService {
         student.setTeacherId(teacherId);
         student.setName(name.trim());
         student.setStudentNo(studentNo.trim());
-        student.setClassName(className == null ? null : className.trim());
+        student.setClassName(normalizeClassName(className));
         student.setTotalPoints(initialPoints);
         student.setVersion(0L);
         studentRepository.saveAndFlush(student);
@@ -319,11 +335,12 @@ public class StudentService {
     private List<String> validateImportRow(
             Long teacherId,
             StudentRow row,
-            Set<String> fileStudentNos
+            Set<String> fileStudentKeys
     ) {
         List<String> errors = new ArrayList<>();
         String name = row.name() == null ? "" : row.name().trim();
         String studentNo = row.studentNo() == null ? "" : row.studentNo().trim();
+        String className = normalizeClassName(row.className());
 
         if (name.isBlank()) {
             errors.add("姓名不能为空");
@@ -334,21 +351,33 @@ public class StudentService {
             if (studentNo.length() > 64) {
                 errors.add("学号不能超过64位");
             }
-            if (!fileStudentNos.add(studentNo)) {
-                errors.add("学号在文件中重复");
+            String classStudentKey = className + "::" + studentNo;
+            if (!fileStudentKeys.add(classStudentKey)) {
+                errors.add("同一班级内学号重复");
             }
-            if (studentRepository.existsByTeacherIdAndStudentNo(teacherId, studentNo)) {
-                errors.add("学号已存在");
+            if (studentRepository.existsByTeacherIdAndClassNameAndStudentNo(
+                    teacherId,
+                    className,
+                    studentNo
+            )) {
+                errors.add("该班级下学号已存在");
             }
         }
 
-        if (row.className() != null && row.className().trim().length() > 64) {
+        if (className.length() > 64) {
             errors.add("班级不能超过64位");
         }
         if (row.initialPoints() < 0 || row.initialPoints() > 99999) {
             errors.add("初始积分应在0到99999之间");
         }
         return errors;
+    }
+
+    private String normalizeClassName(String className) {
+        if (className == null || className.isBlank()) {
+            return "未分班";
+        }
+        return className.trim();
     }
 
     private List<StudentRow> parseRows(MultipartFile file) {

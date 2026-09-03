@@ -108,6 +108,14 @@ export function listStudents(
   });
 }
 
+export function listStudentClasses(token: string): Promise<string[]> {
+  return request<string[]>("/students/classes", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
 export async function exportStudentsFile(
   token: string,
   filters?: { keyword?: string; className?: string }

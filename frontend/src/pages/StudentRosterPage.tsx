@@ -5,6 +5,7 @@ import {
   addStudent,
   deleteStudent,
   importStudents,
+  listStudentClasses,
   listStudents
 } from "../api";
 import type { Student, StudentImportResult } from "../types";
@@ -15,6 +16,8 @@ interface StudentRosterPageProps {
 
 export default function StudentRosterPage({ token }: StudentRosterPageProps) {
   const [students, setStudents] = useState<Student[]>([]);
+  const [classList, setClassList] = useState<string[]>([]);
+  const [selectedClass, setSelectedClass] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -31,7 +34,11 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
   async function reload() {
     setLoading(true);
     try {
-      setStudents(await listStudents(token));
+      const result =
+        selectedClass === "ALL"
+          ? await listStudents(token)
+          : await listStudents(token, { className: selectedClass });
+      setStudents(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载学生名单失败");
     } finally {
@@ -39,9 +46,22 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
     }
   }
 
+  async function reloadClasses() {
+    try {
+      const classes = await listStudentClasses(token);
+      setClassList(classes);
+      if (selectedClass !== "ALL" && !classes.includes(selectedClass)) {
+        setSelectedClass("ALL");
+      }
+    } catch {
+      setClassList([]);
+    }
+  }
+
   useEffect(() => {
+    void reloadClasses();
     void reload();
-  }, [token]);
+  }, [token, selectedClass]);
 
   async function handleImport() {
     if (!file) {
@@ -58,6 +78,7 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      await reloadClasses();
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "导入失败");
@@ -79,6 +100,7 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
       setNewStudentNo("");
       setNewClassName("");
       setNewPoints(0);
+      await reloadClasses();
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "添加学生失败");
@@ -91,6 +113,7 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
     }
     try {
       await deleteStudent(token, student.id);
+      await reloadClasses();
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除学生失败");
@@ -206,6 +229,23 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
 
       <section className="panel">
         <h2>学生名单</h2>
+        <div className="class-tabs">
+          <button
+            className={selectedClass === "ALL" ? "active" : ""}
+            onClick={() => setSelectedClass("ALL")}
+          >
+            全部
+          </button>
+          {classList.map((className) => (
+            <button
+              key={className}
+              className={selectedClass === className ? "active" : ""}
+              onClick={() => setSelectedClass(className)}
+            >
+              {className}
+            </button>
+          ))}
+        </div>
         {loading ? (
           <p>正在加载学生...</p>
         ) : students.length === 0 ? (

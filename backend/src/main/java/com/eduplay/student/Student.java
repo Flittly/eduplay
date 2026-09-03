@@ -35,8 +35,8 @@ public class Student {
     @Column(nullable = false, length = 64)
     private String name;
 
-    @Column(name = "class_name", length = 64)
-    private String className;
+    @Column(name = "class_name", nullable = false, length = 64)
+    private String className = "未分班";
 
     @Column(name = "total_points", nullable = false)
     private Integer totalPoints;
@@ -71,4 +71,3 @@ public class Student {
         updatedAt = Instant.now();
     }
 }
-
