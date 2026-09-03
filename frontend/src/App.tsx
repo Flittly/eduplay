@@ -100,9 +100,12 @@ export default function App() {
       >
         <Route
           path="/"
-          element={<DashboardPage user={user!} token={token ?? ""} />}
+          element={<DashboardPage token={token ?? ""} />}
         />
-        <Route path="/game/:gameCode" element={<GamePage user={user!} />} />
+        <Route
+          path="/game/:gameCode"
+          element={<GamePage token={token ?? ""} />}
+        />
         <Route
           path="/store"
           element={<StorePage token={token ?? ""} />}

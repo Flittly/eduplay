@@ -1,38 +1,36 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { completeSession, getGame, startSession } from "../api";
+import { listInstalledGames } from "../api";
 import ProvincePuzzle from "../games/ProvincePuzzle";
-import type { Game, GameResult, User } from "../types";
+import type { InstalledGame } from "../types";
 
 interface GamePageProps {
-  user: User;
+  token: string;
 }
 
-export default function GamePage({ user }: GamePageProps) {
+interface LocalGameResult {
+  score: number;
+  correctCount: number;
+  totalCount: number;
+}
+
+export default function GamePage({ token }: GamePageProps) {
   const { gameCode = "" } = useParams();
-  const [game, setGame] = useState<Game | null>(null);
-  const [sessionNo, setSessionNo] = useState("");
-  const [result, setResult] = useState<GameResult | null>(null);
+  const [game, setGame] = useState<InstalledGame | null>(null);
+  const [result, setResult] = useState<LocalGameResult | null>(null);
   const [error, setError] = useState("");
-  const startedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
-        const gameDetail = await getGame(gameCode);
-        if (cancelled) {
-          return;
-        }
-        setGame(gameDetail);
-
-        if (user && !startedRef.current) {
-          startedRef.current = true;
-          const session = await startSession(gameCode, user.id);
-          if (!cancelled) {
-            setSessionNo(session.sessionNo);
-          }
+        const installedGames = await listInstalledGames(token);
+        const installedGame = installedGames.find(
+          (item) => item.gameCode === gameCode
+        );
+        if (!cancelled) {
+          setGame(installedGame ?? null);
         }
       } catch (err) {
         if (!cancelled) {
@@ -45,33 +43,7 @@ export default function GamePage({ user }: GamePageProps) {
     return () => {
       cancelled = true;
     };
-  }, [gameCode, user]);
-
-  async function handleComplete(payload: {
-    score: number;
-    correctCount: number;
-    totalCount: number;
-  }) {
-    if (!user) {
-      setError("请先返回首页并进入游客试玩");
-      return;
-    }
-    if (!sessionNo) {
-      setError("游戏会话尚未准备好");
-      return;
-    }
-
-    setError("");
-    try {
-      const gameResult = await completeSession(gameCode, sessionNo, {
-        userId: user.id,
-        ...payload
-      });
-      setResult(gameResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "提交游戏成绩失败");
-    }
-  }
+  }, [gameCode, token]);
 
   if (!game) {
     return (
@@ -94,14 +66,16 @@ export default function GamePage({ user }: GamePageProps) {
       {result ? (
         <section className="result-card">
           <h2>游戏完成</h2>
-          <p>本次获得积分：{result.pointsAwarded}</p>
-          <p>当前总积分：{result.balance}</p>
+          <p>得分：{result.score}</p>
+          <p>
+            正确题数：{result.correctCount} / {result.totalCount}
+          </p>
           <Link className="primary button-link" to="/">
             返回游戏中心
           </Link>
         </section>
       ) : (
-        <ProvincePuzzle onComplete={handleComplete} />
+        <ProvincePuzzle onComplete={setResult} />
       )}
     </div>
   );

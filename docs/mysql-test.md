@@ -95,3 +95,26 @@ user_game_install
 H2:   classpath:db/migration
 MySQL: classpath:db/mysql
 ```
+
+## 6. 自动跑一遍 MySQL 集成测试
+
+测试文件为 `MySQLIntegrationTests`，默认不会执行，需要开启环境变量：
+
+```powershell
+cd E:\Self\workspace\eduplay\backend
+
+$env:MYSQL_TEST='true'
+$env:MYSQL_USER='root'
+$env:MYSQL_PASSWORD='123456'
+$env:MYSQL_URL='jdbc:mysql://localhost:3306/eduplay?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+
+mvn test '-Dtest=MySQLIntegrationTests'
+```
+
+它会验证：
+
+- Flyway 在 MySQL 上建表
+- 注册教师
+- 生成并兑换激活码
+- 安装插件包
+- 查询商城权益

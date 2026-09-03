@@ -15,18 +15,6 @@ export interface User {
   className: string | null;
 }
 
-export interface Game {
-  id: number;
-  gameCode: string;
-  name: string;
-  description: string;
-  coverUrl: string | null;
-  priceCents: number;
-  status: string;
-  version: string;
-  entry: string | null;
-}
-
 export interface StoreGame {
   id: number;
   gameCode: string;
@@ -58,17 +46,6 @@ export interface RedeemResult {
   gameCode: string;
   gameName: string;
   status: string;
-}
-
-export interface GameResult {
-  sessionNo: string;
-  pointsAwarded: number;
-  balance: number;
-}
-
-export interface PointsSummary {
-  userId: number;
-  balance: number;
 }
 
 export interface AuthResult {

@@ -1,16 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getPoints, listInstalledGames } from "../api";
-import type { InstalledGame, User } from "../types";
+import { listInstalledGames } from "../api";
+import type { InstalledGame } from "../types";
 
 interface DashboardPageProps {
-  user: User;
   token: string;
 }
 
-export default function DashboardPage({ user, token }: DashboardPageProps) {
+export default function DashboardPage({ token }: DashboardPageProps) {
   const [games, setGames] = useState<InstalledGame[]>([]);
-  const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -40,12 +38,6 @@ export default function DashboardPage({ user, token }: DashboardPageProps) {
     };
   }, [token]);
 
-  useEffect(() => {
-    getPoints(user.id)
-      .then((summary) => setPoints(summary.balance))
-      .catch(() => setPoints(0));
-  }, [user.id]);
-
   if (loading) {
     return <div className="page-content">正在加载游戏中心...</div>;
   }
@@ -59,8 +51,8 @@ export default function DashboardPage({ user, token }: DashboardPageProps) {
           <p>选择一个地理游戏开始学习</p>
         </div>
         <div className="points-card">
-          <span>当前积分</span>
-          <strong>{points}</strong>
+          <span>已安装游戏</span>
+          <strong>{games.length}</strong>
         </div>
       </header>
 
