@@ -1,17 +1,23 @@
 import type {
   ApiResponse,
+  AuthResult,
   Game,
   GameResult,
   PointsSummary,
+  Student,
+  StudentPointsDetail,
+  StudentPointsResponse,
+  StudentImportResult,
   User
 } from "./types";
 
 const BASE_URL = "/api/v1";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
   const response = await fetch(`${BASE_URL}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options?.headers ?? {})
     },
     ...options
@@ -30,6 +36,134 @@ export function createGuest(): Promise<User> {
   return request<User>("/users/guest", {
     method: "POST",
     body: JSON.stringify({ nickname: "游客" })
+  });
+}
+
+export function registerLocal(payload: {
+  username: string;
+  password: string;
+  nickname?: string;
+  role?: string;
+  studentNo?: string;
+  className?: string;
+}): Promise<AuthResult> {
+  return request<AuthResult>("/auth/local/register", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function loginLocal(payload: {
+  username: string;
+  password: string;
+}): Promise<AuthResult> {
+  return request<AuthResult>("/auth/local/login", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getCurrentUser(token: string): Promise<User> {
+  return request<User>("/auth/me", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function logout(token: string): Promise<void> {
+  return request<void>("/auth/logout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function importStudents(
+  file: File,
+  token: string
+): Promise<StudentImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return request<StudentImportResult>("/students/import", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+}
+
+export function listStudents(
+  token: string,
+  filters?: { keyword?: string; className?: string }
+): Promise<Student[]> {
+  const params = new URLSearchParams();
+  if (filters?.keyword) {
+    params.set("keyword", filters.keyword);
+  }
+  if (filters?.className) {
+    params.set("className", filters.className);
+  }
+  const query = params.toString();
+  return request<Student[]>(`/students${query ? `?${query}` : ""}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function addStudent(
+  token: string,
+  payload: {
+    name: string;
+    studentNo: string;
+    className?: string;
+    initialPoints?: number;
+  }
+): Promise<Student> {
+  return request<Student>("/students", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteStudent(token: string, studentId: number): Promise<void> {
+  return request<void>(`/students/${studentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function adjustStudentPoints(
+  token: string,
+  studentId: number,
+  payload: { amount: number; reason?: string }
+): Promise<StudentPointsResponse> {
+  return request<StudentPointsResponse>(`/students/${studentId}/points`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getStudentPoints(
+  token: string,
+  studentId: number
+): Promise<StudentPointsDetail> {
+  return request<StudentPointsDetail>(`/students/${studentId}/points`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
   });
 }
 
@@ -73,4 +207,3 @@ export function completeSession(
 export function getPoints(userId: number): Promise<PointsSummary> {
   return request<PointsSummary>(`/users/${userId}/points`);
 }
-

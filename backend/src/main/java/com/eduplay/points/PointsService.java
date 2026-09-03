@@ -27,13 +27,33 @@ public class PointsService {
             String bizId,
             String idempotencyKey
     ) {
+        return changePoints(userId, amount, "EARN", bizType, bizId, idempotencyKey);
+    }
+
+    @Transactional
+    public int initializePoints(
+            Long userId,
+            int amount,
+            String bizType,
+            String bizId
+    ) {
+        return changePoints(userId, amount, "INIT", bizType, bizId, "init:" + bizId);
+    }
+
+    private int changePoints(
+            Long userId,
+            int amount,
+            String changeType,
+            String bizType,
+            String bizId,
+            String idempotencyKey
+    ) {
         if (amount < 0) {
-            throw new BusinessException("INVALID_POINTS", "奖励积分不能为负数");
+            throw new BusinessException("INVALID_POINTS", "积分不能为负数");
         }
         if (ledgerRepository.existsByIdempotencyKey(idempotencyKey)) {
             throw new BusinessException("DUPLICATE_POINTS_EVENT", "积分事件重复提交");
         }
-
         PointsAccount account = accountRepository.findByUserId(userId)
                 .orElseGet(() -> createAccount(userId));
 
@@ -44,7 +64,7 @@ public class PointsService {
         PointsLedger ledger = new PointsLedger();
         ledger.setAccountId(account.getId());
         ledger.setUserId(userId);
-        ledger.setChangeType("EARN");
+        ledger.setChangeType(changeType);
         ledger.setAmount(amount);
         ledger.setBalanceAfter(balanceAfter);
         ledger.setBizType(bizType);
@@ -73,4 +93,3 @@ public class PointsService {
     public record PointsSummary(Long userId, int balance) {
     }
 }
-

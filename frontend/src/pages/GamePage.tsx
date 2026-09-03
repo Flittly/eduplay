@@ -5,7 +5,7 @@ import ProvincePuzzle from "../games/ProvincePuzzle";
 import type { Game, GameResult, User } from "../types";
 
 interface GamePageProps {
-  user: User | null;
+  user: User;
 }
 
 export default function GamePage({ user }: GamePageProps) {
@@ -75,16 +75,16 @@ export default function GamePage({ user }: GamePageProps) {
 
   if (!game) {
     return (
-      <main className="page">
+      <div className="page-content">
         <p>{error || "正在加载游戏..."}</p>
         <Link to="/">返回游戏中心</Link>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="page">
-      <header className="topbar">
+    <div className="page-content">
+      <header className="page-header">
         <Link to="/">返回游戏中心</Link>
         <h1>{game.name}</h1>
       </header>
@@ -103,7 +103,6 @@ export default function GamePage({ user }: GamePageProps) {
       ) : (
         <ProvincePuzzle onComplete={handleComplete} />
       )}
-    </main>
+    </div>
   );
 }
-
