@@ -5,6 +5,7 @@ import {
   adjustStudentPoints,
   exportStudentsFile,
   getStudentPoints,
+  listStudentClasses,
   listStudents
 } from "../api";
 import type { Student, StudentPointsDetail } from "../types";
@@ -15,8 +16,9 @@ interface StudentPointsPageProps {
 
 export default function StudentPointsPage({ token }: StudentPointsPageProps) {
   const [students, setStudents] = useState<Student[]>([]);
+  const [classList, setClassList] = useState<string[]>([]);
+  const [selectedClass, setSelectedClass] = useState("ALL");
   const [keyword, setKeyword] = useState("");
-  const [className, setClassName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -30,7 +32,11 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
   async function reload() {
     setLoading(true);
     try {
-      setStudents(await listStudents(token, { keyword, className }));
+      const filters =
+        selectedClass === "ALL"
+          ? { keyword }
+          : { keyword, className: selectedClass };
+      setStudents(await listStudents(token, filters));
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载学生失败");
     } finally {
@@ -38,15 +44,32 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
     }
   }
 
+  async function reloadClasses() {
+    try {
+      const classes = await listStudentClasses(token);
+      setClassList(classes);
+      if (selectedClass !== "ALL" && !classes.includes(selectedClass)) {
+        setSelectedClass("ALL");
+      }
+    } catch {
+      setClassList([]);
+    }
+  }
+
   useEffect(() => {
+    void reloadClasses();
     void reload();
-  }, [token, keyword, className]);
+  }, [token, keyword, selectedClass]);
 
   async function handleExport() {
     setExporting(true);
     setError("");
     try {
-      await exportStudentsFile(token, { keyword, className });
+      const filters =
+        selectedClass === "ALL"
+          ? { keyword }
+          : { keyword, className: selectedClass };
+      await exportStudentsFile(token, filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出失败");
     } finally {
@@ -104,11 +127,6 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
             onChange={(event) => setKeyword(event.target.value)}
             placeholder="搜索姓名或学号"
           />
-          <input
-            value={className}
-            onChange={(event) => setClassName(event.target.value)}
-            placeholder="按班级筛选"
-          />
           <button
             className="secondary toolbar-action"
             disabled={exporting}
@@ -122,6 +140,23 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
 
       <section className="panel">
         <h2>积分列表</h2>
+        <div className="class-tabs">
+          <button
+            className={selectedClass === "ALL" ? "active" : ""}
+            onClick={() => setSelectedClass("ALL")}
+          >
+            全部
+          </button>
+          {classList.map((className) => (
+            <button
+              key={className}
+              className={selectedClass === className ? "active" : ""}
+              onClick={() => setSelectedClass(className)}
+            >
+              {className}
+            </button>
+          ))}
+        </div>
         {loading ? (
           <p>正在加载学生...</p>
         ) : students.length === 0 ? (

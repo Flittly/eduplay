@@ -6,7 +6,8 @@ import {
   deleteStudent,
   importStudents,
   listStudentClasses,
-  listStudents
+  listStudents,
+  updateStudent
 } from "../api";
 import type { Student, StudentImportResult } from "../types";
 
@@ -30,6 +31,11 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
   const [newStudentNo, setNewStudentNo] = useState("");
   const [newClassName, setNewClassName] = useState("");
   const [newPoints, setNewPoints] = useState(0);
+  const [editTarget, setEditTarget] = useState<Student | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editStudentNo, setEditStudentNo] = useState("");
+  const [editClassName, setEditClassName] = useState("");
+  const [editPoints, setEditPoints] = useState(0);
 
   async function reload() {
     setLoading(true);
@@ -117,6 +123,33 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除学生失败");
+    }
+  }
+
+  function openEdit(student: Student) {
+    setEditTarget(student);
+    setEditName(student.name);
+    setEditStudentNo(student.studentNo);
+    setEditClassName(student.className ?? "");
+    setEditPoints(student.totalPoints);
+  }
+
+  async function handleUpdateStudent() {
+    if (!editTarget) {
+      return;
+    }
+    try {
+      await updateStudent(token, editTarget.id, {
+        name: editName,
+        studentNo: editStudentNo,
+        className: editClassName,
+        totalPoints: editPoints
+      });
+      setEditTarget(null);
+      await reloadClasses();
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "修改学生失败");
     }
   }
 
@@ -269,6 +302,7 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
                   <td>{student.className ?? "-"}</td>
                   <td>{student.totalPoints}</td>
                   <td>
+                    <button onClick={() => openEdit(student)}>修改</button>
                     <button onClick={() => handleDelete(student)}>删除</button>
                   </td>
                 </tr>
@@ -277,6 +311,47 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
           </table>
         )}
       </section>
+
+      {editTarget && (
+        <div className="modal-mask">
+          <div className="modal-card">
+            <h2>修改学生</h2>
+            <label>
+              姓名
+              <input
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+              />
+            </label>
+            <label>
+              学号
+              <input
+                value={editStudentNo}
+                onChange={(event) => setEditStudentNo(event.target.value)}
+              />
+            </label>
+            <label>
+              班级
+              <input
+                value={editClassName}
+                onChange={(event) => setEditClassName(event.target.value)}
+              />
+            </label>
+            <label>
+              积分
+              <input
+                type="number"
+                value={editPoints}
+                onChange={(event) => setEditPoints(Number(event.target.value))}
+              />
+            </label>
+            <button className="primary" onClick={handleUpdateStudent}>
+              保存
+            </button>
+            <button onClick={() => setEditTarget(null)}>取消</button>
+          </div>
+        </div>
+      )}
 
       <div className="page-footer-actions">
         <Link className="secondary button-link" to="/teacher/points">

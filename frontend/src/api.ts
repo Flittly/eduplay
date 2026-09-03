@@ -175,6 +175,25 @@ export function addStudent(
   });
 }
 
+export function updateStudent(
+  token: string,
+  studentId: number,
+  payload: {
+    name: string;
+    studentNo: string;
+    className?: string;
+    totalPoints?: number;
+  }
+): Promise<Student> {
+  return request<Student>(`/students/${studentId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
 export function deleteStudent(token: string, studentId: number): Promise<void> {
   return request<void>(`/students/${studentId}`, {
     method: "DELETE",

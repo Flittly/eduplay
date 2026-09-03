@@ -213,6 +213,61 @@ public class StudentService {
     }
 
     @Transactional
+    public StudentResponse updateStudent(
+            String authorizationHeader,
+            Long studentId,
+            UpdateStudentRequest request
+    ) {
+        AppUser teacher = requireTeacher(authorizationHeader);
+        Student student = getOwnedStudent(teacher.getId(), studentId);
+        String name = request.name().trim();
+        String studentNo = request.studentNo().trim();
+        String className = normalizeClassName(request.className());
+
+        if (name.isBlank()) {
+            throw new BusinessException("INVALID_STUDENT_NAME", "姓名不能为空");
+        }
+        if (studentNo.isBlank()) {
+            throw new BusinessException("INVALID_STUDENT_NO", "学号不能为空");
+        }
+        if (studentRepository.existsByTeacherIdAndClassNameAndStudentNoAndIdNot(
+                teacher.getId(),
+                className,
+                studentNo,
+                studentId
+        )) {
+            throw new BusinessException("STUDENT_NO_EXISTS", "该班级下学号已存在");
+        }
+
+        student.setName(name);
+        student.setStudentNo(studentNo);
+        student.setClassName(className);
+
+        if (request.totalPoints() != null
+                && !request.totalPoints().equals(student.getTotalPoints())) {
+            int newTotal = request.totalPoints();
+            if (newTotal < 0) {
+                throw new BusinessException("INVALID_POINTS", "积分不能小于0");
+            }
+            int delta = newTotal - student.getTotalPoints();
+            student.setTotalPoints(newTotal);
+            StudentPointsLedger ledger = new StudentPointsLedger();
+            ledger.setStudentId(student.getId());
+            ledger.setTeacherId(teacher.getId());
+            ledger.setChangeType(delta > 0 ? "MANUAL_EARN" : "MANUAL_DEDUCT");
+            ledger.setAmount(delta);
+            ledger.setBalanceAfter(newTotal);
+            ledger.setBizType("EDIT_STUDENT");
+            ledger.setBizId(UUID.randomUUID().toString());
+            ledger.setIdempotencyKey("edit:" + student.getId() + ":" + UUID.randomUUID());
+            ledgerRepository.save(ledger);
+        }
+
+        studentRepository.saveAndFlush(student);
+        return StudentResponse.from(student);
+    }
+
+    @Transactional
     public void deleteStudent(String authorizationHeader, Long studentId) {
         AppUser teacher = requireTeacher(authorizationHeader);
         Student student = getOwnedStudent(teacher.getId(), studentId);
@@ -521,6 +576,14 @@ public class StudentService {
             String studentNo,
             String className,
             Integer initialPoints
+    ) {
+    }
+
+    public record UpdateStudentRequest(
+            String name,
+            String studentNo,
+            String className,
+            Integer totalPoints
     ) {
     }
 

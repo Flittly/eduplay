@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -75,6 +76,26 @@ public class StudentController {
     ) {
         studentService.deleteStudent(authorization, studentId);
         return ApiResponse.ok();
+    }
+
+    @PutMapping("/{studentId}")
+    public ApiResponse<StudentService.StudentResponse> updateStudent(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long studentId,
+            @Valid @RequestBody UpdateStudentRequest request
+    ) {
+        StudentService.UpdateStudentRequest serviceRequest =
+                new StudentService.UpdateStudentRequest(
+                        request.name(),
+                        request.studentNo(),
+                        request.className(),
+                        request.totalPoints()
+                );
+        return ApiResponse.ok(studentService.updateStudent(
+                authorization,
+                studentId,
+                serviceRequest
+        ));
     }
 
     @PostMapping("/{studentId}/points")
@@ -165,6 +186,19 @@ public class StudentController {
             int amount,
             @Size(max = 64, message = "原因不能超过64位")
             String reason
+    ) {
+    }
+
+    public record UpdateStudentRequest(
+            @NotBlank(message = "姓名不能为空")
+            @Size(max = 64, message = "姓名不能超过64位")
+            String name,
+            @NotBlank(message = "学号不能为空")
+            @Size(max = 64, message = "学号不能超过64位")
+            String studentNo,
+            @Size(max = 64, message = "班级不能超过64位")
+            String className,
+            Integer totalPoints
     ) {
     }
 }
