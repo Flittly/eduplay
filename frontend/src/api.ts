@@ -5,6 +5,7 @@ import type {
   GameResult,
   InstalledGame,
   PointsSummary,
+  RedeemResult,
   Student,
   StudentPointsDetail,
   StudentPointsResponse,
@@ -195,6 +196,16 @@ export function installGame(token: string, gameCode: string): Promise<StoreGame>
     headers: {
       Authorization: `Bearer ${token}`
     }
+  });
+}
+
+export function redeemCode(token: string, code: string): Promise<RedeemResult> {
+  return request<RedeemResult>("/store/redeem", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ code })
   });
 }
 

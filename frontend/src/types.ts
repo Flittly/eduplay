@@ -35,8 +35,11 @@ export interface StoreGame {
   coverUrl: string | null;
   priceCents: number;
   version: string;
+  owned: boolean;
+  entitlementSource: string | null;
   installed: boolean;
   installedVersion: string | null;
+  updateAvailable: boolean;
 }
 
 export interface InstalledGame {
@@ -47,6 +50,13 @@ export interface InstalledGame {
   coverUrl: string | null;
   version: string;
   installedVersion: string;
+  status: string;
+  updateAvailable: boolean;
+}
+
+export interface RedeemResult {
+  gameCode: string;
+  gameName: string;
   status: string;
 }
 

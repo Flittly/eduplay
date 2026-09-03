@@ -3,6 +3,7 @@ import {
   installGame,
   listInstalledGames,
   listStoreGames,
+  redeemCode,
   uninstallGame
 } from "../api";
 import type { InstalledGame, StoreGame } from "../types";
@@ -16,7 +17,10 @@ export default function StorePage({ token }: StorePageProps) {
   const [installedCount, setInstalledCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [updatingCode, setUpdatingCode] = useState<string | null>(null);
+  const [busyGameCode, setBusyGameCode] = useState<string | null>(null);
+  const [redeemGame, setRedeemGame] = useState<StoreGame | null>(null);
+  const [code, setCode] = useState("");
+  const [redeeming, setRedeeming] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -39,7 +43,7 @@ export default function StorePage({ token }: StorePageProps) {
   }, [token]);
 
   async function handleInstall(game: StoreGame) {
-    setUpdatingCode(game.gameCode);
+    setBusyGameCode(game.gameCode);
     setError("");
     try {
       await installGame(token, game.gameCode);
@@ -47,7 +51,7 @@ export default function StorePage({ token }: StorePageProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "安装失败");
     } finally {
-      setUpdatingCode(null);
+      setBusyGameCode(null);
     }
   }
 
@@ -55,7 +59,7 @@ export default function StorePage({ token }: StorePageProps) {
     if (!window.confirm(`确定卸载 ${game.name} 吗？`)) {
       return;
     }
-    setUpdatingCode(game.gameCode);
+    setBusyGameCode(game.gameCode);
     setError("");
     try {
       await uninstallGame(token, game.gameCode);
@@ -63,7 +67,25 @@ export default function StorePage({ token }: StorePageProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "卸载失败");
     } finally {
-      setUpdatingCode(null);
+      setBusyGameCode(null);
+    }
+  }
+
+  async function handleRedeem() {
+    if (!redeemGame) {
+      return;
+    }
+    setRedeeming(true);
+    setError("");
+    try {
+      await redeemCode(token, code);
+      setCode("");
+      setRedeemGame(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "兑换失败");
+    } finally {
+      setRedeeming(false);
     }
   }
 
@@ -77,7 +99,7 @@ export default function StorePage({ token }: StorePageProps) {
         <div>
           <p className="page-kicker">EduPlay Store</p>
           <h1>游戏商城</h1>
-          <p>浏览、购买并安装地理教学游戏</p>
+          <p>兑换激活码、安装并更新地理教学游戏</p>
         </div>
         <div className="points-card">
           <span>已安装</span>
@@ -89,7 +111,7 @@ export default function StorePage({ token }: StorePageProps) {
 
       <div className="game-grid">
         {games.map((game) => {
-          const busy = updatingCode === game.gameCode;
+          const busy = busyGameCode === game.gameCode;
           return (
             <article key={game.gameCode} className="store-card">
               <div className="game-card-icon">🗺️</div>
@@ -99,13 +121,28 @@ export default function StorePage({ token }: StorePageProps) {
               <div className="store-meta">
                 <span>版本：{game.version}</span>
                 <span>
-                  {game.installed
-                    ? `已安装：${game.installedVersion}`
-                    : "未安装"}
+                  {game.owned ? "已拥有" : "未拥有"} ·{" "}
+                  {game.installed ? "已安装" : "未安装"}
                 </span>
               </div>
 
-              {game.installed ? (
+              {game.updateAvailable && game.installed ? (
+                <button
+                  className="primary full-button"
+                  disabled={busy}
+                  onClick={() => handleInstall(game)}
+                >
+                  {busy ? "更新中..." : `更新到 ${game.version}`}
+                </button>
+              ) : game.owned && !game.installed ? (
+                <button
+                  className="primary full-button"
+                  disabled={busy}
+                  onClick={() => handleInstall(game)}
+                >
+                  {busy ? "安装中..." : "安装"}
+                </button>
+              ) : game.installed ? (
                 <button
                   className="secondary full-button"
                   disabled={busy}
@@ -117,15 +154,40 @@ export default function StorePage({ token }: StorePageProps) {
                 <button
                   className="primary full-button"
                   disabled={busy}
-                  onClick={() => handleInstall(game)}
+                  onClick={() => setRedeemGame(game)}
                 >
-                  {busy ? "处理中..." : "安装"}
+                  兑换激活码
                 </button>
               )}
             </article>
           );
         })}
       </div>
+
+      {redeemGame && (
+        <div className="modal-mask">
+          <div className="modal-card">
+            <h2>兑换 {redeemGame.name}</h2>
+            <p>请输入购买后获得的激活码</p>
+            <label>
+              激活码
+              <input
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="PROVINCE-PUZZLE-2026"
+              />
+            </label>
+            <button
+              className="primary"
+              disabled={!code.trim() || redeeming}
+              onClick={handleRedeem}
+            >
+              {redeeming ? "兑换中..." : "确认兑换"}
+            </button>
+            <button onClick={() => setRedeemGame(null)}>取消</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
