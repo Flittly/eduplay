@@ -722,6 +722,23 @@ a:focus-visible {
   flex-wrap: wrap;
 }
 
+.toolbar-action {
+  margin-left: auto;
+}
+
+.panel-tip {
+  margin: 0 0 14px;
+  color: var(--ink-weak);
+  font-weight: 700;
+}
+
+.panel-empty {
+  padding: 24px 0;
+  color: var(--ink-weak);
+  font-weight: 700;
+  text-align: center;
+}
+
 .toolbar input,
 .add-student-form input {
   padding: 10px;
@@ -730,6 +747,10 @@ a:focus-visible {
   background: var(--paper);
   color: var(--ink);
   font-family: inherit;
+}
+
+.toolbar input[type="file"] {
+  margin-bottom: 0;
 }
 
 .toolbar input:focus,

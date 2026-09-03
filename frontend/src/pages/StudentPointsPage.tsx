@@ -1,56 +1,36 @@
+import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  addStudent,
   adjustStudentPoints,
-  deleteStudent,
+  exportStudentsFile,
   getStudentPoints,
-  importStudents,
   listStudents
 } from "../api";
-import type {
-  Student,
-  StudentImportResult,
-  StudentPointsDetail,
-  User
-} from "../types";
+import type { Student, StudentPointsDetail } from "../types";
 
-interface TeacherStudentsPageProps {
-  user: User;
-  token: string | null;
+interface StudentPointsPageProps {
+  token: string;
 }
 
-export default function TeacherStudentsPage({
-  user,
-  token
-}: TeacherStudentsPageProps) {
+export default function StudentPointsPage({ token }: StudentPointsPageProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [keyword, setKeyword] = useState("");
   const [className, setClassName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [importResult, setImportResult] = useState<StudentImportResult | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const [newName, setNewName] = useState("");
-  const [newStudentNo, setNewStudentNo] = useState("");
-  const [newClassName, setNewClassName] = useState("");
-  const [newPoints, setNewPoints] = useState(0);
-
-  const [selectedDetail, setSelectedDetail] = useState<StudentPointsDetail | null>(null);
+  const [selectedDetail, setSelectedDetail] =
+    useState<StudentPointsDetail | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<Student | null>(null);
   const [adjustAmount, setAdjustAmount] = useState(0);
   const [adjustReason, setAdjustReason] = useState("");
 
   async function reload() {
-    if (!token) {
-      return;
-    }
     setLoading(true);
     try {
-      const data = await listStudents(token, { keyword, className });
-      setStudents(data);
+      setStudents(await listStudents(token, { keyword, className }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载学生失败");
     } finally {
@@ -62,61 +42,20 @@ export default function TeacherStudentsPage({
     void reload();
   }, [token, keyword, className]);
 
-  async function handleImport() {
-    if (!file || !token) {
-      setError("请先选择 Excel 文件");
-      return;
-    }
+  async function handleExport() {
+    setExporting(true);
     setError("");
-    setImportResult(null);
-    setSubmitting(true);
     try {
-      const result = await importStudents(file, token);
-      setImportResult(result);
-      await reload();
+      await exportStudentsFile(token, { keyword, className });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "导入失败");
+      setError(err instanceof Error ? err.message : "导出失败");
     } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleAddStudent() {
-    if (!token) {
-      return;
-    }
-    setError("");
-    try {
-      await addStudent(token, {
-        name: newName,
-        studentNo: newStudentNo,
-        className: newClassName,
-        initialPoints: newPoints
-      });
-      setNewName("");
-      setNewStudentNo("");
-      setNewClassName("");
-      setNewPoints(0);
-      await reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "添加学生失败");
-    }
-  }
-
-  async function handleDelete(student: Student) {
-    if (!token || !window.confirm(`确定删除 ${student.name} 吗？`)) {
-      return;
-    }
-    try {
-      await deleteStudent(token, student.id);
-      await reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "删除学生失败");
+      setExporting(false);
     }
   }
 
   async function handleAdjustPoints() {
-    if (!token || !adjustTarget) {
+    if (!adjustTarget) {
       return;
     }
     try {
@@ -138,9 +77,6 @@ export default function TeacherStudentsPage({
   }
 
   async function handleShowDetail(student: Student) {
-    if (!token) {
-      return;
-    }
     try {
       const detail = await getStudentPoints(token, student.id);
       setSelectedDetail(detail);
@@ -149,17 +85,13 @@ export default function TeacherStudentsPage({
     }
   }
 
-  if (!token) {
-    return <div className="page-content">登录状态已失效，请重新登录。</div>;
-  }
-
   return (
     <div className="page-content">
       <header className="page-header">
         <div>
           <p className="page-kicker">教学管理</p>
           <h1>学生积分</h1>
-          <p>维护学生名单，查看和调整课堂积分</p>
+          <p>查看学生积分，手动增加或扣减课堂积分</p>
         </div>
       </header>
 
@@ -177,95 +109,25 @@ export default function TeacherStudentsPage({
             onChange={(event) => setClassName(event.target.value)}
             placeholder="按班级筛选"
           />
-          <a
-            className="primary button-link"
-            href="/api/v1/students/import/template"
+          <button
+            className="secondary toolbar-action"
+            disabled={exporting}
+            onClick={handleExport}
           >
-            下载模板
-          </a>
-        </div>
-      </section>
-
-      <section className="panel">
-        <h2>导入学生</h2>
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        />
-        <button
-          className="primary"
-          disabled={!file || submitting}
-          onClick={handleImport}
-        >
-          {submitting ? "正在导入..." : "开始导入"}
-        </button>
-
-        {importResult && (
-          <div className="import-result">
-            <p>总行数：{importResult.total}</p>
-            <p>成功：{importResult.success}</p>
-            <p>失败：{importResult.failed}</p>
-            {importResult.failed > 0 && (
-              <table className="result-table">
-                <thead>
-                  <tr>
-                    <th>Excel 行</th>
-                    <th>姓名</th>
-                    <th>学号</th>
-                    <th>原因</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importResult.failures.map((failure) => (
-                    <tr key={failure.rowNumber}>
-                      <td>{failure.rowNumber}</td>
-                      <td>{failure.name}</td>
-                      <td>{failure.studentNo}</td>
-                      <td>{failure.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <h2>添加学生</h2>
-        <div className="add-student-form">
-          <input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="姓名"
-          />
-          <input
-            value={newStudentNo}
-            onChange={(event) => setNewStudentNo(event.target.value)}
-            placeholder="学号"
-          />
-          <input
-            value={newClassName}
-            onChange={(event) => setNewClassName(event.target.value)}
-            placeholder="班级"
-          />
-          <input
-            type="number"
-            value={newPoints}
-            onChange={(event) => setNewPoints(Number(event.target.value))}
-            placeholder="初始积分"
-          />
-          <button className="primary" onClick={handleAddStudent}>
-            添加
+            <Download size={16} />
+            {exporting ? "正在导出..." : "导出 Excel"}
           </button>
         </div>
       </section>
 
       <section className="panel">
-        <h2>学生列表</h2>
+        <h2>积分列表</h2>
         {loading ? (
           <p>正在加载学生...</p>
+        ) : students.length === 0 ? (
+          <p className="panel-empty">
+            暂无学生数据，请先到「学生管理」导入或添加学生。
+          </p>
         ) : (
           <table className="result-table">
             <thead>
@@ -291,7 +153,6 @@ export default function TeacherStudentsPage({
                     <button onClick={() => setAdjustTarget(student)}>
                       改积分
                     </button>
-                    <button onClick={() => handleDelete(student)}>删除</button>
                   </td>
                 </tr>
               ))}

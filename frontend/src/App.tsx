@@ -5,7 +5,8 @@ import DashboardPage from "./pages/DashboardPage";
 import GamePage from "./pages/GamePage";
 import LoginPage from "./pages/LoginPage";
 import StorePage from "./pages/StorePage";
-import TeacherStudentsPage from "./pages/TeacherStudentsPage";
+import StudentPointsPage from "./pages/StudentPointsPage";
+import StudentRosterPage from "./pages/StudentRosterPage";
 import { getCurrentUser, logout } from "./api";
 import type { User } from "./types";
 
@@ -111,8 +112,12 @@ export default function App() {
           element={<StorePage token={token ?? ""} />}
         />
         <Route
+          path="/teacher/points"
+          element={<StudentPointsPage token={token ?? ""} />}
+        />
+        <Route
           path="/teacher/students"
-          element={<TeacherStudentsPage user={user!} token={token} />}
+          element={<StudentRosterPage token={token ?? ""} />}
         />
       </Route>
     </Routes>

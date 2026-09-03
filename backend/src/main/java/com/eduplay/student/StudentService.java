@@ -94,29 +94,76 @@ public class StudentService {
             String className
     ) {
         AppUser teacher = requireTeacher(authorizationHeader);
+        return findStudents(teacher.getId(), keyword, className).stream()
+                .map(StudentResponse::from)
+                .toList();
+    }
+
+    private List<Student> findStudents(
+            Long teacherId,
+            String keyword,
+            String className
+    ) {
         List<Student> students;
 
         if (keyword != null && !keyword.isBlank()) {
             students = studentRepository
                     .findByTeacherIdAndNameContainingIgnoreCaseOrderByNameAsc(
-                            teacher.getId(),
+                            teacherId,
                             keyword.trim()
                     );
         } else if (className != null && !className.isBlank()) {
             students = studentRepository
                     .findByTeacherIdAndClassNameIgnoreCaseOrderByNameAsc(
-                            teacher.getId(),
+                            teacherId,
                             className.trim()
                     );
         } else {
-            students = studentRepository.findByTeacherIdOrderByClassNameAscNameAsc(
-                    teacher.getId()
-            );
+            students = studentRepository
+                    .findByTeacherIdOrderByClassNameAscNameAsc(teacherId);
         }
 
-        return students.stream()
+        return students;
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] createExportWorkbook(
+            String authorizationHeader,
+            String keyword,
+            String className
+    ) throws IOException {
+        AppUser teacher = requireTeacher(authorizationHeader);
+        List<StudentResponse> students = findStudents(
+                teacher.getId(),
+                keyword,
+                className
+        ).stream()
                 .map(StudentResponse::from)
                 .toList();
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("学生名单");
+            String[] headers = {"姓名", "学号", "班级", "初始积分"};
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+
+            int rowIndex = 1;
+            for (StudentResponse student : students) {
+                Row row = sheet.createRow(rowIndex++);
+                row.createCell(0).setCellValue(student.name());
+                row.createCell(1).setCellValue(student.studentNo());
+                row.createCell(2).setCellValue(
+                        student.className() == null ? "" : student.className()
+                );
+                row.createCell(3).setCellValue(student.totalPoints());
+            }
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
     }
 
     @Transactional
@@ -516,4 +563,3 @@ public class StudentService {
     ) {
     }
 }
-

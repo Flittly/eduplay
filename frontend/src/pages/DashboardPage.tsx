@@ -51,7 +51,7 @@ export default function DashboardPage({ token }: DashboardPageProps) {
           <p>选择一个地理游戏开始学习</p>
         </div>
         <div className="points-card">
-          <span>已安装游戏</span>
+          <span>已安装</span>
           <strong>{games.length}</strong>
         </div>
       </header>

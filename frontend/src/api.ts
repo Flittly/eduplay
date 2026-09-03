@@ -108,6 +108,47 @@ export function listStudents(
   });
 }
 
+export async function exportStudentsFile(
+  token: string,
+  filters?: { keyword?: string; className?: string }
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (filters?.keyword) {
+    params.set("keyword", filters.keyword);
+  }
+  if (filters?.className) {
+    params.set("className", filters.className);
+  }
+  const query = params.toString();
+
+  const response = await fetch(`${BASE_URL}/students/export${query ? `?${query}` : ""}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    let message = "导出失败";
+    try {
+      const body = (await response.json()) as ApiResponse<unknown>;
+      message = body.message || message;
+    } catch {
+      // 非 JSON 响应时使用默认错误提示
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "students-export.xlsx";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function addStudent(
   token: string,
   payload: {

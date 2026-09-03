@@ -1,4 +1,4 @@
-import { LogOut, Map, ShoppingBag, Users } from "lucide-react";
+import { LogOut, Map, ShoppingBag, UserCog, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import type { User } from "../types";
 
@@ -40,13 +40,25 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
 
           {user.role === "TEACHER" && (
             <NavLink
-              to="/teacher/students"
+              to="/teacher/points"
               className={({ isActive }) =>
                 `side-link ${isActive ? "active" : ""}`
               }
             >
               <Users size={18} />
-              <span>学生导入</span>
+              <span>学生积分</span>
+            </NavLink>
+          )}
+
+          {user.role === "TEACHER" && (
+            <NavLink
+              to="/teacher/students"
+              className={({ isActive }) =>
+                `side-link ${isActive ? "active" : ""}`
+              }
+            >
+              <UserCog size={18} />
+              <span>学生管理</span>
             </NavLink>
           )}
         </nav>

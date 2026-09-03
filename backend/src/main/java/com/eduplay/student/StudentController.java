@@ -117,6 +117,30 @@ public class StudentController {
                 .body(template);
     }
 
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportStudents(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "className", required = false) String className
+    ) throws IOException {
+        byte[] workbook = studentService.createExportWorkbook(
+                authorization,
+                keyword,
+                className
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ));
+        headers.setContentDisposition(ContentDisposition.attachment()
+                .filename("students-export.xlsx", StandardCharsets.UTF_8)
+                .build());
+        headers.setContentLength(workbook.length);
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(workbook);
+    }
+
     public record AddStudentRequest(
             @NotBlank(message = "姓名不能为空")
             @Size(max = 64, message = "姓名不能超过64位")
