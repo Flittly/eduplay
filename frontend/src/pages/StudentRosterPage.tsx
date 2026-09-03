@@ -1,5 +1,5 @@
-import { Download } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Download, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   addStudent,
@@ -18,6 +18,7 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] =
     useState<StudentImportResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -54,11 +55,8 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
       const result = await importStudents(file, token);
       setImportResult(result);
       setFile(null);
-      const fileInput = document.querySelector<HTMLInputElement>(
-        'input[type="file"]'
-      );
-      if (fileInput) {
-        fileInput.value = "";
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
       await reload();
     } catch (err) {
@@ -124,11 +122,18 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
             <Download size={16} />
             下载模板
           </a>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
+          <label className="secondary file-picker">
+            <Upload size={16} />
+            {file ? "重新选择文件" : "选择 Excel 文件"}
+            <input
+              ref={fileInputRef}
+              className="visually-hidden"
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          {file && <span className="file-name">{file.name}</span>}
           <button
             className="primary"
             disabled={!file || submitting}
@@ -233,8 +238,10 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
         )}
       </section>
 
-      <div>
-        <Link to="/teacher/points">前往学生积分</Link>
+      <div className="page-footer-actions">
+        <Link className="secondary button-link" to="/teacher/points">
+          前往学生积分
+        </Link>
       </div>
     </div>
   );

@@ -219,8 +219,10 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
         </div>
       )}
 
-      <div>
-        <Link to="/">返回游戏中心</Link>
+      <div className="page-footer-actions">
+        <Link className="secondary button-link" to="/">
+          返回游戏中心
+        </Link>
       </div>
     </div>
   );
