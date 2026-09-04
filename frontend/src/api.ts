@@ -14,10 +14,15 @@ import type {
 } from "./types";
 
 const BASE_URL = "/api/v1";
+const CLOUD_BASE_URL = "/cloud-api/api/v1";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  options?: RequestInit,
+  baseUrl: string = BASE_URL
+): Promise<T> {
   const isFormData = options?.body instanceof FormData;
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
@@ -265,6 +270,26 @@ export function redeemCode(token: string, code: string): Promise<RedeemResult> {
   });
 }
 
+export function installDownloadedPackage(
+  token: string,
+  gameCode: string,
+  zip: Blob,
+  fileName: string
+): Promise<StoreGame> {
+  const form = new FormData();
+  form.append("file", zip, fileName);
+  return request<StoreGame>(
+    `/store/games/${encodeURIComponent(gameCode)}/package-install`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: form
+    }
+  );
+}
+
 export function uninstallGame(token: string, gameCode: string): Promise<void> {
   return request<void>(`/store/games/${gameCode}/uninstall`, {
     method: "POST",
@@ -320,4 +345,89 @@ export function submitGameScore(
       body: JSON.stringify(payload)
     }
   );
+}
+
+export function cloudLoginLocal(payload: {
+  username: string;
+  password: string;
+}): Promise<AuthResult> {
+  return request<AuthResult>(
+    "/auth/local/login",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    },
+    CLOUD_BASE_URL
+  );
+}
+
+export function cloudRegisterLocal(payload: {
+  username: string;
+  password: string;
+  nickname?: string;
+}): Promise<AuthResult> {
+  return request<AuthResult>(
+    "/auth/local/register",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    },
+    CLOUD_BASE_URL
+  );
+}
+
+export function cloudListStoreGames(token: string): Promise<StoreGame[]> {
+  return request<StoreGame[]>(
+    "/store/games",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    },
+    CLOUD_BASE_URL
+  );
+}
+
+export function cloudRedeemCode(
+  token: string,
+  code: string
+): Promise<RedeemResult> {
+  return request<RedeemResult>(
+    "/store/redeem",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ code })
+    },
+    CLOUD_BASE_URL
+  );
+}
+
+export async function cloudDownloadPackage(
+  token: string,
+  gameCode: string
+): Promise<Blob> {
+  const response = await fetch(
+    `${CLOUD_BASE_URL}/store/games/${encodeURIComponent(gameCode)}/package`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let message = "下载插件包失败";
+    try {
+      const body = (await response.json()) as ApiResponse<unknown>;
+      message = body.message || message;
+    } catch {
+      // 非 JSON 响应时使用默认错误提示
+    }
+    throw new Error(message);
+  }
+
+  return response.blob();
 }

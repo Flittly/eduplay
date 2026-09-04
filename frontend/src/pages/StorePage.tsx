@@ -1,53 +1,181 @@
 import { useEffect, useState } from "react";
 import {
-  installGame,
+  cloudDownloadPackage,
+  cloudListStoreGames,
+  cloudLoginLocal,
+  cloudRedeemCode,
+  cloudRegisterLocal,
+  installDownloadedPackage,
   listInstalledGames,
-  listStoreGames,
-  redeemCode,
   uninstallGame
 } from "../api";
-import type { InstalledGame, StoreGame } from "../types";
+import type { InstalledGame, StoreGame, User } from "../types";
 
 interface StorePageProps {
   token: string;
 }
 
+const CLOUD_TOKEN_KEY = "eduplay.cloud.token";
+const CLOUD_USER_KEY = "eduplay.cloud.user";
+
+function readCloudUser(): User | null {
+  try {
+    const raw = localStorage.getItem(CLOUD_USER_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function StorePage({ token }: StorePageProps) {
   const [games, setGames] = useState<StoreGame[]>([]);
-  const [installedCount, setInstalledCount] = useState(0);
+  const [installedGames, setInstalledGames] = useState<InstalledGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyGameCode, setBusyGameCode] = useState<string | null>(null);
+
+  const [cloudToken, setCloudToken] = useState<string | null>(
+    () => localStorage.getItem(CLOUD_TOKEN_KEY)
+  );
+  const [cloudUser, setCloudUser] = useState<User | null>(readCloudUser);
+  const [cloudMode, setCloudMode] = useState<"login" | "register">("login");
+  const [cloudUsername, setCloudUsername] = useState("");
+  const [cloudPassword, setCloudPassword] = useState("");
+  const [cloudNickname, setCloudNickname] = useState("");
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudError, setCloudError] = useState("");
+
   const [redeemGame, setRedeemGame] = useState<StoreGame | null>(null);
   const [code, setCode] = useState("");
   const [redeeming, setRedeeming] = useState(false);
 
-  async function load() {
+  async function loadInstalled() {
+    const installed = await listInstalledGames(token);
+    setInstalledGames(installed);
+    return installed;
+  }
+
+  async function loadStore(installed: InstalledGame[] = installedGames) {
+    if (!cloudToken) {
+      setGames([]);
+      return;
+    }
     setLoading(true);
     try {
-      const [storeGames, installedGames] = await Promise.all([
-        listStoreGames(token),
-        listInstalledGames(token)
-      ]);
-      setGames(storeGames);
-      setInstalledCount(installedGames.length);
+      const cloudGames = await cloudListStoreGames(cloudToken);
+      const merged = cloudGames.map((game) => {
+        const local = installed.find(
+          (item) => item.gameCode === game.gameCode
+        );
+        return {
+          ...game,
+          installed: Boolean(local),
+          installedVersion: local?.installedVersion ?? null,
+          updateAvailable: Boolean(
+            local && local.installedVersion !== game.version
+          )
+        };
+      });
+      setGames(merged);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载游戏商城失败");
+      setError(err instanceof Error ? err.message : "加载云端商城失败");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const installed = await loadInstalled();
+        if (!cancelled) {
+          await loadStore(installed);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "加载商城失败");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
     void load();
-  }, [token]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, cloudToken]);
+
+  async function handleCloudSubmit() {
+    setCloudError("");
+    setCloudBusy(true);
+    try {
+      const result =
+        cloudMode === "login"
+          ? await cloudLoginLocal({
+              username: cloudUsername,
+              password: cloudPassword
+            })
+          : await cloudRegisterLocal({
+              username: cloudUsername,
+              password: cloudPassword,
+              nickname: cloudNickname || cloudUsername
+            });
+      setCloudToken(result.token);
+      setCloudUser(result.user);
+      localStorage.setItem(CLOUD_TOKEN_KEY, result.token);
+      localStorage.setItem(CLOUD_USER_KEY, JSON.stringify(result.user));
+    } catch (err) {
+      setCloudError(err instanceof Error ? err.message : "云端账号操作失败");
+    } finally {
+      setCloudBusy(false);
+    }
+  }
+
+  function handleCloudLogout() {
+    setCloudToken(null);
+    setCloudUser(null);
+    localStorage.removeItem(CLOUD_TOKEN_KEY);
+    localStorage.removeItem(CLOUD_USER_KEY);
+    setGames([]);
+  }
+
+  async function handleRedeem() {
+    if (!redeemGame || !cloudToken) {
+      return;
+    }
+    setRedeeming(true);
+    setError("");
+    try {
+      await cloudRedeemCode(cloudToken, code);
+      setCode("");
+      setRedeemGame(null);
+      await loadStore(await loadInstalled());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "兑换失败");
+    } finally {
+      setRedeeming(false);
+    }
+  }
 
   async function handleInstall(game: StoreGame) {
+    if (!cloudToken) {
+      return;
+    }
     setBusyGameCode(game.gameCode);
     setError("");
     try {
-      await installGame(token, game.gameCode);
-      await load();
+      const blob = await cloudDownloadPackage(cloudToken, game.gameCode);
+      await installDownloadedPackage(
+        token,
+        game.gameCode,
+        blob,
+        `${game.gameCode}-${game.version}.zip`
+      );
+      await loadStore(await loadInstalled());
     } catch (err) {
       setError(err instanceof Error ? err.message : "安装失败");
     } finally {
@@ -63,7 +191,7 @@ export default function StorePage({ token }: StorePageProps) {
     setError("");
     try {
       await uninstallGame(token, game.gameCode);
-      await load();
+      await loadStore(await loadInstalled());
     } catch (err) {
       setError(err instanceof Error ? err.message : "卸载失败");
     } finally {
@@ -71,22 +199,80 @@ export default function StorePage({ token }: StorePageProps) {
     }
   }
 
-  async function handleRedeem() {
-    if (!redeemGame) {
-      return;
-    }
-    setRedeeming(true);
-    setError("");
-    try {
-      await redeemCode(token, code);
-      setCode("");
-      setRedeemGame(null);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "兑换失败");
-    } finally {
-      setRedeeming(false);
-    }
+  if (!cloudToken || !cloudUser) {
+    return (
+      <div className="page-content">
+        <header className="page-header">
+          <div>
+            <p className="page-kicker">EduPlay Cloud Store</p>
+            <h1>游戏商城</h1>
+            <p>商城数据来自云端服务器，学生和积分仍保存在本机</p>
+          </div>
+        </header>
+
+        <section className="cloud-login-card">
+          <h2>登录云端账号</h2>
+          <p>兑换与下载游戏前，请先登录你的云端教师账号。</p>
+
+          <div className="login-tabs">
+            <button
+              className={cloudMode === "login" ? "active" : ""}
+              onClick={() => setCloudMode("login")}
+            >
+              登录
+            </button>
+            <button
+              className={cloudMode === "register" ? "active" : ""}
+              onClick={() => setCloudMode("register")}
+            >
+              注册
+            </button>
+          </div>
+
+          <label>
+            用户名
+            <input
+              value={cloudUsername}
+              onChange={(event) => setCloudUsername(event.target.value)}
+            />
+          </label>
+          <label>
+            密码
+            <input
+              type="password"
+              value={cloudPassword}
+              onChange={(event) => setCloudPassword(event.target.value)}
+            />
+          </label>
+          {cloudMode === "register" && (
+            <label>
+              昵称
+              <input
+                value={cloudNickname}
+                onChange={(event) => setCloudNickname(event.target.value)}
+                placeholder="例如：王老师"
+              />
+            </label>
+          )}
+
+          {cloudError && <div className="error">{cloudError}</div>}
+
+          <button
+            className="primary"
+            disabled={
+              cloudBusy || !cloudUsername.trim() || !cloudPassword.trim()
+            }
+            onClick={handleCloudSubmit}
+          >
+            {cloudBusy
+              ? "处理中..."
+              : cloudMode === "login"
+                ? "登录云端账号"
+                : "注册云端账号"}
+          </button>
+        </section>
+      </div>
+    );
   }
 
   if (loading) {
@@ -97,13 +283,17 @@ export default function StorePage({ token }: StorePageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">EduPlay Store</p>
+          <p className="page-kicker">EduPlay Cloud Store</p>
           <h1>游戏商城</h1>
-          <p>兑换激活码、安装并更新地理教学游戏</p>
+          <p>云端：{cloudUser.username}</p>
         </div>
-        <div className="points-card">
-          <span>已安装</span>
-          <strong>{installedCount}</strong>
+        <div className="store-actions">
+          <span className="points-card">
+            已安装 {installedGames.length}
+          </span>
+          <button className="secondary" onClick={handleCloudLogout}>
+            退出云端
+          </button>
         </div>
       </header>
 
@@ -122,7 +312,7 @@ export default function StorePage({ token }: StorePageProps) {
                 <span>版本：{game.version}</span>
                 <span>
                   {game.owned ? "已拥有" : "未拥有"} ·{" "}
-                  {game.installed ? "已安装" : "未安装"}
+                  {game.installed ? "本机已安装" : "本机未安装"}
                 </span>
               </div>
 
@@ -140,7 +330,7 @@ export default function StorePage({ token }: StorePageProps) {
                   disabled={busy}
                   onClick={() => handleInstall(game)}
                 >
-                  {busy ? "安装中..." : "安装"}
+                  {busy ? "下载安装中..." : "下载并安装"}
                 </button>
               ) : game.installed ? (
                 <button
