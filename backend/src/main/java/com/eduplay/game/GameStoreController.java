@@ -61,6 +61,18 @@ public class GameStoreController {
         ));
     }
 
+    @PostMapping(value = "/store/games/import-package",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<GameStoreService.StoreGameResponse> importPackage(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ApiResponse.ok(gameStoreService.importDownloadedPackage(
+                authorization,
+                file
+        ));
+    }
+
     @PostMapping("/store/redeem")
     public ApiResponse<GameStoreService.RedeemResult> redeemCode(
             @RequestHeader(value = "Authorization", required = false) String authorization,

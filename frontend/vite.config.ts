@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
         },
         "/cloud-api": {
           target: cloudApiTarget,
-          changeOrigin: true
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/cloud-api/, "")
         }
       }
     }

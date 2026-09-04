@@ -224,6 +224,27 @@ public class GameStoreService {
     }
 
     @Transactional
+    public StoreGameResponse importDownloadedPackage(
+            String authorizationHeader,
+            MultipartFile file
+    ) {
+        AppUser teacher = requireTeacher(authorizationHeader);
+        if (file.isEmpty()) {
+            throw new BusinessException("EMPTY_FILE", "请选择插件包文件");
+        }
+        try {
+            PluginManifest manifest = readManifest(file.getBytes());
+            return installDownloadedPackage(
+                    authorizationHeader,
+                    manifest.gameCode(),
+                    file
+            );
+        } catch (IOException ex) {
+            throw new BusinessException("PACKAGE_READ_FAILED", "插件包读取失败");
+        }
+    }
+
+    @Transactional
     public void uninstallGame(String authorizationHeader, String gameCode) {
         AppUser teacher = requireTeacher(authorizationHeader);
         GameProduct game = getGame(gameCode);
@@ -332,6 +353,18 @@ public class GameStoreService {
 
     private PluginManifest readManifest(byte[] bytes, String expectedGameCode)
             throws IOException {
+        PluginManifest manifest = readManifest(bytes);
+        if (!expectedGameCode.equals(manifest.gameCode())) {
+            throw new BusinessException(
+                    "MANIFEST_MISMATCH",
+                    "插件包中的 gameCode 与游戏不匹配"
+            );
+        }
+        return manifest;
+    }
+
+    private PluginManifest readManifest(byte[] bytes)
+            throws IOException {
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
@@ -344,12 +377,6 @@ public class GameStoreService {
                     String gameCode = root.path("gameCode").asText();
                     String version = root.path("version").asText();
                     String name = root.path("name").asText();
-                    if (!expectedGameCode.equals(gameCode)) {
-                        throw new BusinessException(
-                                "MANIFEST_MISMATCH",
-                                "插件包中的 gameCode 与游戏不匹配"
-                        );
-                    }
                     if (version.isBlank() || name.isBlank()) {
                         throw new BusinessException(
                                 "INVALID_MANIFEST",

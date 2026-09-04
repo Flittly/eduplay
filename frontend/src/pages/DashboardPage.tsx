@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { listInstalledGames } from "../api";
+import { importGamePackageZip, listInstalledGames } from "../api";
 import type { InstalledGame } from "../types";
 
 interface DashboardPageProps {
@@ -11,6 +11,9 @@ export default function DashboardPage({ token }: DashboardPageProps) {
   const [games, setGames] = useState<InstalledGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +41,32 @@ export default function DashboardPage({ token }: DashboardPageProps) {
     };
   }, [token]);
 
+  async function handleManualImport(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      setError("请选择 .zip 格式的游戏插件包");
+      return;
+    }
+    setImportBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const imported = await importGamePackageZip(token, file);
+      setNotice(`已导入并安装：${imported.name}（${imported.version}）`);
+      const gameList = await listInstalledGames(token);
+      setGames(gameList);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "导入游戏失败");
+    } finally {
+      setImportBusy(false);
+      if (importFileRef.current) {
+        importFileRef.current.value = "";
+      }
+    }
+  }
+
   if (loading) {
     return <div className="page-content">正在加载游戏中心...</div>;
   }
@@ -57,6 +86,32 @@ export default function DashboardPage({ token }: DashboardPageProps) {
       </header>
 
       {error && <div className="error">{error}</div>}
+      {notice && <div className="success">{notice}</div>}
+
+      <section className="manual-import-card">
+        <div>
+          <h2>手动导入游戏包</h2>
+          <p>
+            适用于无网电脑：把游戏 zip 拷到本机后直接导入，不需要登录云端商城。
+          </p>
+        </div>
+        <input
+          ref={importFileRef}
+          type="file"
+          accept=".zip"
+          hidden
+          onChange={(event) =>
+            void handleManualImport(event.target.files?.[0])
+          }
+        />
+        <button
+          className="primary"
+          disabled={importBusy}
+          onClick={() => importFileRef.current?.click()}
+        >
+          {importBusy ? "导入中..." : "选择 zip 导入"}
+        </button>
+      </section>
 
       <div className="game-grid">
         {games.length === 0 ? (

@@ -290,6 +290,21 @@ export function installDownloadedPackage(
   );
 }
 
+export function importGamePackageZip(
+  token: string,
+  file: File
+): Promise<StoreGame> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<StoreGame>("/store/games/import-package", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: form
+  });
+}
+
 export function uninstallGame(token: string, gameCode: string): Promise<void> {
   return request<void>(`/store/games/${gameCode}/uninstall`, {
     method: "POST",

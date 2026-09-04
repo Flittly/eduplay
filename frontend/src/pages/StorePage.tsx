@@ -210,6 +210,8 @@ export default function StorePage({ token }: StorePageProps) {
           </div>
         </header>
 
+        {error && <div className="error">{error}</div>}
+
         <section className="cloud-login-card">
           <h2>登录云端账号</h2>
           <p>兑换与下载游戏前，请先登录你的云端教师账号。</p>
