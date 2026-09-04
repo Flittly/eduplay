@@ -31,4 +31,4 @@ eduplay:
 
 logging:
   level:
-    org.hibernate.SQL: debug
+    org.hibernate.SQL: info
