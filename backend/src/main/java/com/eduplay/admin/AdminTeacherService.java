@@ -3,7 +3,6 @@ package com.eduplay.admin;
 import com.eduplay.auth.AuthService;
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.NotFoundException;
-import com.eduplay.student.StudentRepository;
 import com.eduplay.user.AppUser;
 import com.eduplay.user.AppUserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,18 +17,15 @@ public class AdminTeacherService {
 
     private final AuthService authService;
     private final AppUserRepository userRepository;
-    private final StudentRepository studentRepository;
     private final PasswordEncoder passwordEncoder;
 
     public AdminTeacherService(
             AuthService authService,
             AppUserRepository userRepository,
-            StudentRepository studentRepository,
             PasswordEncoder passwordEncoder
     ) {
         this.authService = authService;
         this.userRepository = userRepository;
-        this.studentRepository = studentRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -91,7 +87,7 @@ public class AdminTeacherService {
                 teacher.getUsername(),
                 teacher.getNickname(),
                 teacher.getStatus(),
-                studentRepository.countByTeacherId(teacher.getId()),
+                0,
                 teacher.getCreatedAt() == null ? null : teacher.getCreatedAt().toString()
         );
     }
@@ -106,4 +102,3 @@ public class AdminTeacherService {
     ) {
     }
 }
-

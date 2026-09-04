@@ -3,7 +3,6 @@ package com.eduplay.admin;
 import com.eduplay.auth.AuthService;
 import com.eduplay.game.ActivationCodeRepository;
 import com.eduplay.game.GameProductRepository;
-import com.eduplay.student.StudentRepository;
 import com.eduplay.user.AppUserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,20 +12,17 @@ public class AdminStatsService {
 
     private final AuthService authService;
     private final AppUserRepository userRepository;
-    private final StudentRepository studentRepository;
     private final GameProductRepository gameProductRepository;
     private final ActivationCodeRepository activationCodeRepository;
 
     public AdminStatsService(
             AuthService authService,
             AppUserRepository userRepository,
-            StudentRepository studentRepository,
             GameProductRepository gameProductRepository,
             ActivationCodeRepository activationCodeRepository
     ) {
         this.authService = authService;
         this.userRepository = userRepository;
-        this.studentRepository = studentRepository;
         this.gameProductRepository = gameProductRepository;
         this.activationCodeRepository = activationCodeRepository;
     }
@@ -40,7 +36,7 @@ public class AdminStatsService {
                 userRepository.countByRole("TEACHER"),
                 userRepository.countByRoleAndStatus("TEACHER", "ACTIVE"),
                 userRepository.countByRoleAndStatus("TEACHER", "DISABLED"),
-                studentRepository.count(),
+                0,
                 gameProductRepository.count(),
                 totalCodes,
                 usedCodes,

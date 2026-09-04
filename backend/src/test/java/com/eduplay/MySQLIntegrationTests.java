@@ -18,13 +18,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("mysql")
+@ActiveProfiles("cloud")
 @EnabledIfEnvironmentVariable(named = "MYSQL_TEST", matches = "true")
 class MySQLIntegrationTests {
 
@@ -38,12 +39,12 @@ class MySQLIntegrationTests {
     private ActivationCodeRepository activationCodeRepository;
 
     @Test
-    void mysqlCanRunAuthStoreAndInstallFlow() throws Exception {
+    void cloudProfileCanRunAuthGameAndRedeemFlow() throws Exception {
         String username = "mysql_" + UUID.randomUUID().toString().substring(0, 8);
         MvcResult registerResult = mockMvc.perform(post("/api/v1/auth/local/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username
-                                + "\",\"password\":\"123456\",\"nickname\":\"MySQL测试\"}"))
+                                + "\",\"password\":\"123456\",\"nickname\":\"云端测试\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -52,9 +53,36 @@ class MySQLIntegrationTests {
         );
         String token = registerJson.path("data").path("token").asText();
 
-        String codeValue = "MYSQL-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
+        MvcResult adminLoginResult = mockMvc.perform(post("/api/v1/admin/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String adminToken = jsonMapper.readTree(
+                adminLoginResult.getResponse().getContentAsString()
+        ).path("data").path("token").asText();
+
+        String gameCode = "cloud_game_" + UUID.randomUUID().toString().substring(0, 8);
+        MvcResult createGameResult = mockMvc.perform(post("/api/v1/admin/games")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"gameCode\":\"" + gameCode
+                                + "\",\"name\":\"云端测试游戏\",\"priceCents\":990}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        long gameId = jsonMapper.readTree(
+                createGameResult.getResponse().getContentAsString()
+        ).path("data").path("id").asLong();
+
+        mockMvc.perform(patch("/api/v1/admin/games/" + gameId + "/status")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isOk());
+
+        String codeValue = "CLOUD-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
         ActivationCode activationCode = new ActivationCode();
-        activationCode.setGameCode("province_puzzle");
+        activationCode.setGameCode(gameCode);
         activationCode.setCode(codeValue);
         activationCode.setStatus("UNUSED");
         activationCode.setCreatedAt(Instant.now());
@@ -65,18 +93,16 @@ class MySQLIntegrationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"" + codeValue + "\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.gameCode").value("province_puzzle"));
-
-        mockMvc.perform(post("/api/v1/store/games/province_puzzle/install")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.owned").value(true))
-                .andExpect(jsonPath("$.data.installed").value(true));
+                .andExpect(jsonPath("$.data.gameCode").value(gameCode));
 
         mockMvc.perform(get("/api/v1/store/games")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].gameCode").value("province_puzzle"))
-                .andExpect(jsonPath("$.data[0].installed").value(true));
+                .andExpect(jsonPath(
+                        "$.data[?(@.gameCode == '" + gameCode + "')].owned"
+                ).value(true))
+                .andExpect(jsonPath(
+                        "$.data[?(@.gameCode == '" + gameCode + "')].installed"
+                ).value(false));
     }
 }

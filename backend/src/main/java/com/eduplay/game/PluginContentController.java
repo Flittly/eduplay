@@ -11,9 +11,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import org.springframework.context.annotation.Profile;
 
 @RestController
 @RequestMapping("/api/v1/plugin")
+@Profile("local")
 public class PluginContentController {
 
     private final PluginContentService pluginContentService;

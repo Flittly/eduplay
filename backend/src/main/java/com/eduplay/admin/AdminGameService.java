@@ -9,7 +9,6 @@ import com.eduplay.game.GameProduct;
 import com.eduplay.game.GameProductRepository;
 import com.eduplay.game.PluginPackageService;
 import com.eduplay.game.UserEntitlementRepository;
-import com.eduplay.game.UserGameInstallRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,7 +31,6 @@ public class AdminGameService {
     private final GameProductRepository gameProductRepository;
     private final GamePackageRepository packageRepository;
     private final UserEntitlementRepository entitlementRepository;
-    private final UserGameInstallRepository installRepository;
     private final PluginPackageService pluginPackageService;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -41,14 +39,12 @@ public class AdminGameService {
             GameProductRepository gameProductRepository,
             GamePackageRepository packageRepository,
             UserEntitlementRepository entitlementRepository,
-            UserGameInstallRepository installRepository,
             PluginPackageService pluginPackageService
     ) {
         this.authService = authService;
         this.gameProductRepository = gameProductRepository;
         this.packageRepository = packageRepository;
         this.entitlementRepository = entitlementRepository;
-        this.installRepository = installRepository;
         this.pluginPackageService = pluginPackageService;
     }
 
@@ -211,7 +207,7 @@ public class AdminGameService {
                 product.getStatus(),
                 product.getVersion(),
                 entitlementRepository.countByGameId(product.getId()),
-                installRepository.countByGameId(product.getId()),
+                0,
                 packageRepository.findByGameIdOrderByVersionDesc(product.getId()).size()
         );
     }

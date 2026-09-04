@@ -11,8 +11,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.context.annotation.Profile;
 
 @Service
+@Profile("local")
 public class GameStoreService {
 
     private final AuthService authService;

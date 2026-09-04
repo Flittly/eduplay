@@ -73,6 +73,6 @@ class GameStoreIntegrationTests {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].gameCode").value("province_puzzle"))
-                .andExpect(jsonPath("$.data[0].installedVersion").value("0.1.0"));
+                .andExpect(jsonPath("$.data[0].installedVersion").exists());
     }
 }

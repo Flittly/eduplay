@@ -9,8 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
+import org.springframework.context.annotation.Profile;
 
 @Service
+@Profile("local")
 public class PluginContentService {
 
     private final AuthService authService;

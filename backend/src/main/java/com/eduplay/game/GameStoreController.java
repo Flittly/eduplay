@@ -17,9 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.context.annotation.Profile;
 
 @RestController
 @RequestMapping("/api/v1")
+@Profile("local")
 public class GameStoreController {
 
     private final GameStoreService gameStoreService;

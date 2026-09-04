@@ -16,8 +16,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
+import org.springframework.context.annotation.Profile;
 
 @Service
+@Profile("local")
 public class GameScoreService {
 
     private static final int MAX_SCORE = 99999;
