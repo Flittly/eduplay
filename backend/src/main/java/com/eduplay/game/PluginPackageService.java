@@ -124,6 +124,25 @@ public class PluginPackageService {
         }
     }
 
+    public Path resolveInstalledFile(
+            Long userId,
+            String gameCode,
+            String version,
+            String relativePath
+    ) {
+        Path file = installDir
+                .resolve(String.valueOf(userId))
+                .resolve(gameCode)
+                .resolve(version)
+                .resolve(relativePath)
+                .toAbsolutePath()
+                .normalize();
+        if (!file.startsWith(installDir) || !Files.isRegularFile(file)) {
+            throw new BusinessException("PLUGIN_FILE_NOT_FOUND", "插件资源文件不存在");
+        }
+        return file;
+    }
+
     public void uninstall(Long userId, String gameCode) {
         try {
             Path target = installDir

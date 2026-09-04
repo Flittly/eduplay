@@ -48,6 +48,27 @@ export interface RedeemResult {
   status: string;
 }
 
+export interface GameManifest {
+  gameCode: string;
+  name: string;
+  version: string;
+  minPlatformVersion?: string;
+  maxPlatformVersion?: string;
+  entry: string;
+  backendPlugin?: string | null;
+  description?: string;
+}
+
+export interface GameScoreResult {
+  id: number;
+  name: string;
+  studentNo: string;
+  className: string | null;
+  totalPoints: number;
+  score: number;
+  recorded: boolean;
+}
+
 export interface AuthResult {
   token: string;
   user: User;

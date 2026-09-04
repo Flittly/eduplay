@@ -5,6 +5,7 @@
 backend/target/
 backend/data/
 backend/logs/
+backend/plugins/
 
 frontend/node_modules/
 frontend/dist/

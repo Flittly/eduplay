@@ -113,7 +113,14 @@ public class AuthService {
         if (token == null) {
             throw new BusinessException("UNAUTHORIZED", "请先登录");
         }
+        return requireUserByToken(token);
+    }
 
+    @Transactional(readOnly = true)
+    public AppUser requireUserByToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new BusinessException("UNAUTHORIZED", "请先登录");
+        }
         LocalSession session = sessionRepository.findByToken(token)
                 .filter(item -> item.getExpiresAt().isAfter(Instant.now()))
                 .orElseThrow(() -> new BusinessException("UNAUTHORIZED", "登录状态已失效，请重新登录"));

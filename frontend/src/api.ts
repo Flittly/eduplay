@@ -1,6 +1,8 @@
 import type {
   ApiResponse,
   AuthResult,
+  GameManifest,
+  GameScoreResult,
   InstalledGame,
   RedeemResult,
   Student,
@@ -270,4 +272,52 @@ export function uninstallGame(token: string, gameCode: string): Promise<void> {
       Authorization: `Bearer ${token}`
     }
   });
+}
+
+export async function getInstalledManifest(
+  token: string,
+  gameCode: string
+): Promise<GameManifest> {
+  const response = await fetch(
+    `${BASE_URL}/store/games/${encodeURIComponent(gameCode)}/manifest`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let message = "读取游戏清单失败";
+    try {
+      const body = (await response.json()) as ApiResponse<unknown>;
+      message = body.message || message;
+    } catch {
+      // 非 JSON 响应时使用默认错误提示
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as GameManifest;
+}
+
+export function submitGameScore(
+  token: string,
+  gameCode: string,
+  payload: {
+    studentId: number;
+    score: number;
+    roundId: string;
+  }
+): Promise<GameScoreResult> {
+  return request<GameScoreResult>(
+    `/games/${encodeURIComponent(gameCode)}/scores`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    }
+  );
 }

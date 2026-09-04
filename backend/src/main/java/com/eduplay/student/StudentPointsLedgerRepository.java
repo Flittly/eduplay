@@ -10,5 +10,6 @@ public interface StudentPointsLedgerRepository
     List<StudentPointsLedger> findByStudentIdOrderByCreatedAtDesc(Long studentId);
 
     void deleteByStudentId(Long studentId);
-}
 
+    boolean existsByIdempotencyKey(String idempotencyKey);
+}

@@ -370,7 +370,7 @@ public class StudentService {
         student.setClassName(normalizeClassName(className));
         student.setTotalPoints(initialPoints);
         student.setVersion(0L);
-        studentRepository.saveAndFlush(student);
+        student = studentRepository.saveAndFlush(student);
 
         if (initialPoints != 0) {
             StudentPointsLedger ledger = new StudentPointsLedger();
