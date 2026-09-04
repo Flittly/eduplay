@@ -187,7 +187,7 @@ export default function GamePage({ token }: GamePageProps) {
     return (
       <div className="page-content">
         <p>正在加载游戏...</p>
-        <Link to="/">返回游戏中心</Link>
+        <Link className="secondary button-link" to="/">返回游戏中心</Link>
       </div>
     );
   }
@@ -196,7 +196,7 @@ export default function GamePage({ token }: GamePageProps) {
     return (
       <div className="page-content">
         <p className="error">{error || "游戏不存在或未安装"}</p>
-        <Link className="button-link" to="/">
+        <Link className="secondary button-link" to="/">
           返回游戏中心
         </Link>
       </div>
@@ -206,7 +206,7 @@ export default function GamePage({ token }: GamePageProps) {
   return (
     <div className="page-content">
       <header className="page-header">
-        <Link to="/">返回游戏中心</Link>
+        <Link className="secondary button-link" to="/">返回游戏中心</Link>
         <h1>{installedGame.name}</h1>
       </header>
 
@@ -227,7 +227,7 @@ export default function GamePage({ token }: GamePageProps) {
         </section>
       ) : started && playUrl ? (
         <div className="game-frame">
-          <button className="button-link" type="button" onClick={() => setStarted(false)}>
+          <button className="secondary button-link" type="button" onClick={() => setStarted(false)}>
             返回重选
           </button>
           <iframe
