@@ -1,8 +1,6 @@
-# MySQL 本地测试
+# MySQL 云端后端测试
 
 ## 1. 确认 MySQL 已启动
-
-本机服务名是 `MySQL80`，可以先检查：
 
 ```powershell
 Get-Service MySQL80
@@ -14,7 +12,7 @@ Get-Service MySQL80
 Start-Service MySQL80
 ```
 
-## 2. 创建数据库和测试用户
+## 2. 创建云端数据库
 
 进入 MySQL：
 
@@ -25,52 +23,38 @@ mysql -u root -p
 执行：
 
 ```sql
-create database eduplay
+create database eduplay_cloud
   default character set utf8mb4
   collate utf8mb4_unicode_ci;
-
-create user 'eduplay'@'localhost' identified by 'eduplay123';
-grant all privileges on eduplay.* to 'eduplay'@'localhost';
-flush privileges;
 ```
 
-如果不想新建用户，也可以直接用 root：
+## 3. 启动云端后端
+
+云端后端是独立工程 `eduplay-server`：
 
 ```powershell
-mysql -u root -p eduplay
+cd E:\Self\workspace\eduplay-server
+
+$env:MYSQL_USER='root'
+$env:MYSQL_PASSWORD='123456'
+$env:MYSQL_URL='jdbc:mysql://localhost:3306/eduplay_cloud?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+
+mvn spring-boot:run
 ```
 
-## 3. 启动后端 MySQL profile
+云端后端默认端口 `18080`。
 
-使用新建的 eduplay 用户：
+## 4. 验证表结构
 
 ```powershell
-cd E:\Self\workspace\eduplay\backend
-
-$env:MYSQL_USER='eduplay'
-$env:MYSQL_PASSWORD='eduplay123'
-$env:MYSQL_URL='jdbc:mysql://localhost:3306/eduplay?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
-
-mvn spring-boot:run '-Dspring-boot.run.profiles=mysql' '-Dspring-boot.run.arguments=--server.port=18080'
+mysql -u root -p eduplay_cloud
 ```
-
-## 4. 验证数据库表已创建
-
-启动日志中看到 Flyway 执行成功即可。
-
-也可以重新打开 MySQL：
-
-```powershell
-mysql -u eduplay -peduplay123 eduplay
-```
-
-查看表：
 
 ```sql
 show tables;
 ```
 
-应该能看到：
+应该只包含云端表，不包含学生/积分表：
 
 ```text
 activation_code
@@ -78,43 +62,16 @@ app_user
 game_package
 game_product
 local_session
-student
-student_points_ledger
 user_entitlement
-user_game_install
 ```
 
-## 5. 本地 H2 和 MySQL 的关系
+## 5. 老师端本地后端
 
-- 默认启动使用 H2：`application.yml`
-- 测试 MySQL 使用 `mysql` profile：`application-mysql.yml`
-
-两套 Flyway 脚本相互独立：
-
-```text
-H2:   classpath:db/migration
-MySQL: classpath:db/mysql
-```
-
-## 6. 自动跑一遍 MySQL 集成测试
-
-测试文件为 `MySQLIntegrationTests`，默认不会执行，需要开启环境变量：
+老师电脑本地后端不再连接 MySQL，默认使用 H2：
 
 ```powershell
 cd E:\Self\workspace\eduplay\backend
-
-$env:MYSQL_TEST='true'
-$env:MYSQL_USER='root'
-$env:MYSQL_PASSWORD='123456'
-$env:MYSQL_URL='jdbc:mysql://localhost:3306/eduplay?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
-
-mvn test '-Dtest=MySQLIntegrationTests'
+mvn spring-boot:run
 ```
 
-它会验证：
-
-- Flyway 在 MySQL 上建表
-- 注册教师
-- 生成并兑换激活码
-- 安装插件包
-- 查询商城权益
+默认端口 `8080`。学生名单、积分、本机已安装游戏都存在本机 H2。
