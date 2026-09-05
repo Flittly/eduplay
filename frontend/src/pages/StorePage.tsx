@@ -29,6 +29,7 @@ function readCloudUser(): User | null {
 
 export default function StorePage({ token }: StorePageProps) {
   const [games, setGames] = useState<StoreGame[]>([]);
+  const [selectedTag, setSelectedTag] = useState("");
   const [installedGames, setInstalledGames] = useState<InstalledGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -141,6 +142,7 @@ export default function StorePage({ token }: StorePageProps) {
     localStorage.removeItem(CLOUD_TOKEN_KEY);
     localStorage.removeItem(CLOUD_USER_KEY);
     setGames([]);
+    setSelectedTag("");
   }
 
   async function handleRedeem() {
@@ -281,6 +283,17 @@ export default function StorePage({ token }: StorePageProps) {
     return <div className="page-content">正在加载游戏商城...</div>;
   }
 
+  const tagNames = Array.from(
+    new Set(
+      games.flatMap((game) => game.tags?.map((tag) => tag.name) ?? [])
+    )
+  );
+  const filteredGames = selectedTag
+    ? games.filter((game) =>
+        game.tags?.some((tag) => tag.name === selectedTag)
+      )
+    : games;
+
   return (
     <div className="page-content">
       <header className="page-header">
@@ -301,8 +314,28 @@ export default function StorePage({ token }: StorePageProps) {
 
       {error && <div className="error">{error}</div>}
 
+      {tagNames.length > 0 && (
+        <div className="tag-filter-bar">
+          <button
+            className={selectedTag === "" ? "active" : ""}
+            onClick={() => setSelectedTag("")}
+          >
+            全部
+          </button>
+          {tagNames.map((name) => (
+            <button
+              key={name}
+              className={selectedTag === name ? "active" : ""}
+              onClick={() => setSelectedTag(name)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="game-grid">
-        {games.map((game) => {
+        {filteredGames.map((game) => {
           const busy = busyGameCode === game.gameCode;
           return (
             <article key={game.gameCode} className="store-card">

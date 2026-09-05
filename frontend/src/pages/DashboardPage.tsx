@@ -9,6 +9,7 @@ interface DashboardPageProps {
 
 export default function DashboardPage({ token }: DashboardPageProps) {
   const [games, setGames] = useState<InstalledGame[]>([]);
+  const [selectedTag, setSelectedTag] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -71,6 +72,17 @@ export default function DashboardPage({ token }: DashboardPageProps) {
     return <div className="page-content">正在加载游戏中心...</div>;
   }
 
+  const tagNames = Array.from(
+    new Set(
+      games.flatMap((game) => game.tags?.map((tag) => tag.name) ?? [])
+    )
+  );
+  const filteredGames = selectedTag
+    ? games.filter((game) =>
+        game.tags?.some((tag) => tag.name === selectedTag)
+      )
+    : games;
+
   return (
     <div className="page-content">
       <header className="page-header">
@@ -113,8 +125,28 @@ export default function DashboardPage({ token }: DashboardPageProps) {
         </button>
       </section>
 
+      {tagNames.length > 0 && (
+        <div className="tag-filter-bar">
+          <button
+            className={selectedTag === "" ? "active" : ""}
+            onClick={() => setSelectedTag("")}
+          >
+            全部
+          </button>
+          {tagNames.map((name) => (
+            <button
+              key={name}
+              className={selectedTag === name ? "active" : ""}
+              onClick={() => setSelectedTag(name)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="game-grid">
-        {games.length === 0 ? (
+        {filteredGames.length === 0 ? (
           <div className="empty-state">
             <p>你还没有安装任何游戏。</p>
             <Link className="primary button-link" to="/store">
@@ -122,7 +154,7 @@ export default function DashboardPage({ token }: DashboardPageProps) {
             </Link>
           </div>
         ) : (
-          games.map((game) => (
+          filteredGames.map((game) => (
             <Link
               key={game.gameCode}
               className="game-card"

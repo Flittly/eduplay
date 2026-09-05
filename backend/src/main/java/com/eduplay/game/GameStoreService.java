@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.springframework.context.annotation.Profile;
@@ -33,6 +34,8 @@ public class GameStoreService {
     private final GamePackageRepository packageRepository;
     private final ActivationCodeRepository activationCodeRepository;
     private final PluginPackageService pluginPackageService;
+    private final GameTagRepository tagRepository;
+    private final GameProductTagRepository productTagRepository;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public GameStoreService(
@@ -42,7 +45,9 @@ public class GameStoreService {
             UserEntitlementRepository entitlementRepository,
             GamePackageRepository packageRepository,
             ActivationCodeRepository activationCodeRepository,
-            PluginPackageService pluginPackageService
+            PluginPackageService pluginPackageService,
+            GameTagRepository tagRepository,
+            GameProductTagRepository productTagRepository
     ) {
         this.authService = authService;
         this.gameProductRepository = gameProductRepository;
@@ -51,6 +56,8 @@ public class GameStoreService {
         this.packageRepository = packageRepository;
         this.activationCodeRepository = activationCodeRepository;
         this.pluginPackageService = pluginPackageService;
+        this.tagRepository = tagRepository;
+        this.productTagRepository = productTagRepository;
     }
 
     @Transactional(readOnly = true)
@@ -184,6 +191,7 @@ public class GameStoreService {
             product.setPriceCents(product.getPriceCents() == null ? 0 : product.getPriceCents());
             product.setStatus("ACTIVE");
             gameProductRepository.save(product);
+            syncManifestTags(product, manifest.tags());
 
             GamePackage gamePackage = packageRepository
                     .findByGameIdAndVersion(product.getId(), manifest.version())
@@ -347,8 +355,20 @@ public class GameStoreService {
                 latestVersion,
                 install.getInstalledVersion(),
                 install.getStatus(),
-                !Objects.equals(install.getInstalledVersion(), latestVersion)
+                !Objects.equals(install.getInstalledVersion(), latestVersion),
+                tagsFor(game.getId())
         );
+    }
+
+    private List<TagItem> tagsFor(Long gameId) {
+        return productTagRepository.findByGameId(gameId).stream()
+                .map(link -> tagRepository.findById(link.getTagId()).orElse(null))
+                .filter(Objects::nonNull)
+                .filter(tag -> "ACTIVE".equals(tag.getStatus()))
+                .sorted(java.util.Comparator.comparing(GameTag::getCategory)
+                        .thenComparing(GameTag::getSortOrder))
+                .map(tag -> new TagItem(tag.getCategory(), tag.getName()))
+                .toList();
     }
 
     private PluginManifest readManifest(byte[] bytes, String expectedGameCode)
@@ -388,7 +408,8 @@ public class GameStoreService {
                             version,
                             name,
                             root.path("description").asText(null),
-                            root.path("entry").asText(null)
+                            root.path("entry").asText(null),
+                            root.path("tags")
                     );
                 }
                 zip.closeEntry();
@@ -403,6 +424,48 @@ public class GameStoreService {
 
     private String sanitizeVersion(String version) {
         return version.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private void syncManifestTags(GameProduct product, JsonNode tagsNode) {
+        if (tagsNode == null || tagsNode.isMissingNode() || !tagsNode.isObject()) {
+            return;
+        }
+        productTagRepository.deleteByGameId(product.getId());
+        Map<String, String> mapping = Map.of(
+                "grades", "GRADE",
+                "textbooks", "TEXTBOOK",
+                "topics", "TOPIC",
+                "other", "OTHER"
+        );
+        mapping.forEach((key, category) -> {
+            JsonNode values = tagsNode.path(key);
+            if (!values.isArray()) {
+                return;
+            }
+            values.forEach(value -> {
+                String name = value.asText("").trim();
+                if (name.isBlank()) {
+                    return;
+                }
+                String code = category + "_"
+                        + name.replaceAll("\\s+", "_").toUpperCase(Locale.ROOT);
+                GameTag tag = tagRepository.findByCode(code).orElseGet(() -> {
+                    GameTag created = new GameTag();
+                    created.setCategory(category);
+                    created.setCode(code);
+                    created.setName(name);
+                    created.setStatus("ACTIVE");
+                    created.setSortOrder((int) tagRepository.count());
+                    created.setCreatedAt(Instant.now());
+                    return tagRepository.save(created);
+                });
+                GameProductTag link = new GameProductTag();
+                link.setGameId(product.getId());
+                link.setTagId(tag.getId());
+                link.setCreatedAt(Instant.now());
+                productTagRepository.save(link);
+            });
+        });
     }
 
     private AppUser requireTeacher(String authorizationHeader) {
@@ -443,7 +506,14 @@ public class GameStoreService {
             String version,
             String installedVersion,
             String status,
-            boolean updateAvailable
+            boolean updateAvailable,
+            List<TagItem> tags
+    ) {
+    }
+
+    public record TagItem(
+            String category,
+            String name
     ) {
     }
 
@@ -459,7 +529,8 @@ public class GameStoreService {
             String version,
             String name,
             String description,
-            String entry
+            String entry,
+            JsonNode tags
     ) {
     }
 }

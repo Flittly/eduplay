@@ -28,6 +28,7 @@ export interface StoreGame {
   installed: boolean;
   installedVersion: string | null;
   updateAvailable: boolean;
+  tags?: GameTag[];
 }
 
 export interface InstalledGame {
@@ -40,6 +41,12 @@ export interface InstalledGame {
   installedVersion: string;
   status: string;
   updateAvailable: boolean;
+  tags?: GameTag[];
+}
+
+export interface GameTag {
+  category: string;
+  name: string;
 }
 
 export interface RedeemResult {
