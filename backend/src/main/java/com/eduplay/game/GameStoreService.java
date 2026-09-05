@@ -384,6 +384,7 @@ public class GameStoreService {
                         );
                     }
                     return new PluginManifest(
+                            gameCode,
                             version,
                             name,
                             root.path("description").asText(null),
@@ -454,6 +455,7 @@ public class GameStoreService {
     }
 
     private record PluginManifest(
+            String gameCode,
             String version,
             String name,
             String description,

@@ -10,3 +10,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+eduplay:
+  cloud:
+    base-url: ${EDUPLAY_CLOUD_URL:http://localhost:18080}
