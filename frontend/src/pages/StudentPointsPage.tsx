@@ -10,6 +10,9 @@ import {
 } from "../api";
 import type { Student, StudentPointsDetail } from "../types";
 
+type SortKey = "name" | "studentNo" | "className" | "totalPoints";
+type SortDirection = "asc" | "desc";
+
 interface StudentPointsPageProps {
   token: string;
 }
@@ -19,6 +22,8 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
   const [classList, setClassList] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState("ALL");
   const [keyword, setKeyword] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -108,6 +113,40 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
     }
   }
 
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  }
+
+  const sortedStudents = [...students];
+  if (sortKey) {
+    const direction = sortDirection === "asc" ? 1 : -1;
+    sortedStudents.sort((a, b) => {
+      if (sortKey === "totalPoints") {
+        return (a.totalPoints - b.totalPoints) * direction;
+      }
+      const left = (a[sortKey] ?? "").toString();
+      const right = (b[sortKey] ?? "").toString();
+      return (
+        left.localeCompare(right, "zh-CN", {
+          numeric: true,
+          sensitivity: "base"
+        }) * direction
+      );
+    });
+  }
+
+  function sortIndicator(key: SortKey) {
+    if (sortKey !== key) {
+      return " ↕";
+    }
+    return sortDirection === "asc" ? " ↑" : " ↓";
+  }
+
   return (
     <div className="page-content">
       <header className="page-header">
@@ -167,15 +206,43 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
           <table className="result-table">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>学号</th>
-                <th>班级</th>
-                <th>积分</th>
+                <th>
+                  <button
+                    className="sort-button"
+                    onClick={() => handleSort("name")}
+                  >
+                    姓名{sortIndicator("name")}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    className="sort-button"
+                    onClick={() => handleSort("studentNo")}
+                  >
+                    学号{sortIndicator("studentNo")}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    className="sort-button"
+                    onClick={() => handleSort("className")}
+                  >
+                    班级{sortIndicator("className")}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    className="sort-button"
+                    onClick={() => handleSort("totalPoints")}
+                  >
+                    积分{sortIndicator("totalPoints")}
+                  </button>
+                </th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {students.map((student) => (
+              {sortedStudents.map((student) => (
                 <tr key={student.id}>
                   <td>{student.name}</td>
                   <td>{student.studentNo}</td>

@@ -861,6 +861,22 @@ a:focus-visible {
   font-weight: 800;
 }
 
+.result-table th .sort-button {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+  box-shadow: none;
+}
+
+.result-table th .sort-button:hover {
+  transform: none;
+  box-shadow: none;
+  text-decoration: underline;
+}
+
 .result-table td {
   background: var(--paper);
 }
