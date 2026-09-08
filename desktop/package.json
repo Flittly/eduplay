@@ -1,0 +1,61 @@
+{
+  "name": "eduplay-desktop",
+  "version": "1.1.0",
+  "description": "EduPlay 老师端桌面壳：启动本地 Java 后端并打开原生窗口",
+  "main": "main.js",
+  "author": "EduPlay",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1"
+  },
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.eduplay.desktop",
+    "productName": "EduPlay",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/target/eduplay-backend-1.1.0.jar",
+        "to": "app.jar"
+      },
+      {
+        "from": "runtime",
+        "to": "jre",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EduPlay"
+    },
+    "toolsets": {
+      "winCodeSign": "0.0.0"
+    },
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
+    "icon": "build/icon.ico"
+  }
+}

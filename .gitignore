@@ -1,0 +1,25 @@
+# Node
+**/node_modules/
+**/dist/
+npm-debug.log*
+yarn-error.log*
+
+# Java
+**/target/
+**/data/
+**/plugins/
+
+# Desktop build output
+**/release/
+**/runtime/
+**/runtime.tmp/
+*.log
+*.db
+*.bak
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.env*
