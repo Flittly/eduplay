@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { loginLocal, registerLocal } from "../api";
+import {
+  clearSavedCredentials,
+  loadSavedCredentials,
+  saveCredentials
+} from "../rememberCredentials";
 import type { User } from "../types";
 
 interface LoginPageProps {
@@ -7,10 +12,12 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const saved = loadSavedCredentials("local");
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState(saved?.username ?? "");
+  const [password, setPassword] = useState(saved?.password ?? "");
   const [nickname, setNickname] = useState("");
+  const [rememberPassword, setRememberPassword] = useState(Boolean(saved));
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -26,6 +33,13 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
               password,
               nickname
             });
+      if (mode === "login") {
+        if (rememberPassword) {
+          saveCredentials("local", { username, password });
+        } else {
+          clearSavedCredentials("local");
+        }
+      }
       onAuthenticated(result.token, result.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
@@ -93,6 +107,19 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
               placeholder="请输入密码"
             />
           </label>
+
+          {mode === "login" && (
+            <label className="remember-row">
+              <input
+                type="checkbox"
+                checked={rememberPassword}
+                onChange={(event) =>
+                  setRememberPassword(event.target.checked)
+                }
+              />
+              <span>记住密码</span>
+            </label>
+          )}
 
           {mode === "register" && (
             <>

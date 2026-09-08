@@ -10,6 +10,11 @@ import {
   uninstallGame
 } from "../api";
 import InfoDialog from "../components/InfoDialog";
+import {
+  clearSavedCredentials,
+  loadSavedCredentials,
+  saveCredentials
+} from "../rememberCredentials";
 import type { InstalledGame, StoreGame, User } from "../types";
 
 interface StorePageProps {
@@ -42,9 +47,17 @@ export default function StorePage({ token }: StorePageProps) {
     () => localStorage.getItem(CLOUD_TOKEN_KEY)
   );
   const [cloudUser, setCloudUser] = useState<User | null>(readCloudUser);
+  const savedCloud = loadSavedCredentials("cloud");
   const [cloudMode, setCloudMode] = useState<"login" | "register">("login");
-  const [cloudUsername, setCloudUsername] = useState("");
-  const [cloudPassword, setCloudPassword] = useState("");
+  const [cloudUsername, setCloudUsername] = useState(
+    savedCloud?.username ?? ""
+  );
+  const [cloudPassword, setCloudPassword] = useState(
+    savedCloud?.password ?? ""
+  );
+  const [cloudRememberPassword, setCloudRememberPassword] = useState(
+    Boolean(savedCloud)
+  );
   const [cloudNickname, setCloudNickname] = useState("");
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState("");
@@ -136,6 +149,16 @@ export default function StorePage({ token }: StorePageProps) {
       setCloudUser(result.user);
       localStorage.setItem(CLOUD_TOKEN_KEY, result.token);
       localStorage.setItem(CLOUD_USER_KEY, JSON.stringify(result.user));
+      if (cloudMode === "login") {
+        if (cloudRememberPassword) {
+          saveCredentials("cloud", {
+            username: cloudUsername,
+            password: cloudPassword
+          });
+        } else {
+          clearSavedCredentials("cloud");
+        }
+      }
     } catch (err) {
       setCloudError(err instanceof Error ? err.message : "云端账号操作失败");
     } finally {
@@ -256,6 +279,18 @@ export default function StorePage({ token }: StorePageProps) {
               onChange={(event) => setCloudPassword(event.target.value)}
             />
           </label>
+          {cloudMode === "login" && (
+            <label className="remember-row">
+              <input
+                type="checkbox"
+                checked={cloudRememberPassword}
+                onChange={(event) =>
+                  setCloudRememberPassword(event.target.checked)
+                }
+              />
+              <span>记住密码</span>
+            </label>
+          )}
           {cloudMode === "register" && (
             <label>
               昵称

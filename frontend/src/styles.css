@@ -361,6 +361,28 @@ a:focus-visible {
   box-shadow: 3px 3px 0 var(--pink);
 }
 
+/* ===== 记住密码 ===== */
+.remember-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
 /* ===== 主布局 ===== */
 .app-shell {
   height: 100vh;
