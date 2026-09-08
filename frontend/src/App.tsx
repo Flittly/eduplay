@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import GamePage from "./pages/GamePage";
 import LoginPage from "./pages/LoginPage";
 import RollCallPage from "./pages/RollCallPage";
+import RandomPickPage from "./pages/RandomPickPage";
 import SeatingPage from "./pages/SeatingPage";
 import StorePage from "./pages/StorePage";
 import StudentPointsPage from "./pages/StudentPointsPage";
@@ -122,6 +123,10 @@ export default function App() {
         <Route
           path="/tools/roll-call"
           element={<RollCallPage token={token ?? ""} />}
+        />
+        <Route
+          path="/tools/random-pick"
+          element={<RandomPickPage token={token ?? ""} />}
         />
         <Route
           path="/tools/seating"

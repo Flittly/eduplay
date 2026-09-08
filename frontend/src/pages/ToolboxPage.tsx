@@ -1,4 +1,4 @@
-import { LayoutGrid, ListChecks } from "lucide-react";
+import { Dices, LayoutGrid, ListChecks } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function ToolboxPage() {
@@ -20,6 +20,16 @@ export default function ToolboxPage() {
           <h2>点名</h2>
           <p>
             把全班姓名分成“未点名 / 已点名”两侧，点击姓名即可切换，适合课堂随机点人。
+          </p>
+        </Link>
+
+        <Link className="tool-card" to="/tools/random-pick">
+          <div className="tool-card-icon">
+            <Dices size={28} />
+          </div>
+          <h2>随机点名</h2>
+          <p>
+            按班级随机抽一名同学，学号姓名大屏展示，可选不重复点名，适合课堂提问。
           </p>
         </Link>
 

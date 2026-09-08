@@ -1979,3 +1979,138 @@ a:focus-visible {
   box-shadow: none;
 }
 
+
+/* ===== 随机点名 ===== */
+.pick-norepeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pick-norepeat input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--pink);
+  cursor: pointer;
+}
+
+.pick-stage {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.pick-stage-settled {
+  box-shadow: 4px 4px 0 var(--green);
+}
+
+.pick-stage-rolling {
+  box-shadow: 4px 4px 0 var(--orange);
+}
+
+.pick-kicker {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-weak);
+  letter-spacing: 0.08em;
+}
+
+.pick-name {
+  margin: 0;
+  font-size: 104px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+
+.pick-stage-rolling .pick-name {
+  color: var(--blue);
+}
+
+.pick-stage-settled .pick-name {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--pink);
+  text-decoration-thickness: 8px;
+  text-underline-offset: 12px;
+}
+
+.pick-name-idle {
+  color: var(--ink-weak);
+}
+
+.pick-no {
+  margin: 0;
+  padding: 6px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper-dim);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--blue);
+  box-shadow: 2px 2px 0 var(--pink);
+}
+
+.pick-no-idle {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-weak);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pick-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.pick-go {
+  min-width: 280px;
+  padding: 16px 40px;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  background: var(--pink);
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 var(--blue);
+  transition: transform 80ms linear, box-shadow 80ms linear;
+}
+
+.pick-go:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--blue);
+}
+
+.pick-go:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--blue);
+}
+
+.pick-go:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pick-pool-tip {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
