@@ -73,6 +73,10 @@ export default function StorePage({ token }: StorePageProps) {
         );
         return {
           ...game,
+          // 云端返回的 coverUrl 是 /api/v1/... 形式，改走 /cloud-api 代理
+          coverUrl: game.coverUrl
+            ? game.coverUrl.replace(/^\/api\/v1/, "/cloud-api/api/v1")
+            : null,
           installed: Boolean(local),
           installedVersion: local?.installedVersion ?? null,
           updateAvailable: Boolean(
@@ -353,7 +357,15 @@ export default function StorePage({ token }: StorePageProps) {
           const busy = busyGameCode === game.gameCode;
           return (
             <article key={game.gameCode} className="store-card">
-              <div className="game-card-icon">🗺️</div>
+              {game.coverUrl ? (
+                <img
+                  className="game-cover"
+                  src={game.coverUrl}
+                  alt={game.name}
+                />
+              ) : (
+                <div className="game-card-icon">🗺️</div>
+              )}
               <div className="store-title-row">
                 <h3>{game.name}</h3>
                 <button

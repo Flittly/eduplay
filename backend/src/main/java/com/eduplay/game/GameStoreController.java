@@ -98,6 +98,16 @@ public class GameStoreController {
                 .body(bytes);
     }
 
+    /** 游戏封面：公开接口（<img> 标签无法携带 token），内容来自插件包内文件 */
+    @GetMapping("/store/games/{gameCode}/cover")
+    public ResponseEntity<byte[]> cover(@PathVariable String gameCode) {
+        GameStoreService.CoverFile cover = gameStoreService.downloadCover(gameCode);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.CONTENT_TYPE, cover.contentType());
+        headers.setCacheControl("max-age=300");
+        return ResponseEntity.ok().headers(headers).body(cover.content());
+    }
+
     @GetMapping("/store/games/{gameCode}/manifest")
     public ResponseEntity<String> installedManifest(
             @RequestHeader(value = "Authorization", required = false) String authorization,

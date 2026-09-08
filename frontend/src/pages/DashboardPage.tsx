@@ -200,7 +200,15 @@ export default function DashboardPage({ token }: DashboardPageProps) {
                   className="game-card-head-main"
                   to={`/game/${game.gameCode}`}
                 >
-                  <div className="game-card-icon">🗺️</div>
+                  {game.coverUrl ? (
+                    <img
+                      className="game-cover"
+                      src={game.coverUrl}
+                      alt={game.name}
+                    />
+                  ) : (
+                    <div className="game-card-icon">🗺️</div>
+                  )}
                   <h3>{game.name}</h3>
                 </Link>
                 <button

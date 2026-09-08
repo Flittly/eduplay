@@ -156,6 +156,9 @@ public class AdminGameService {
                 product.setDescription(manifest.description());
             }
             product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
+            if (manifest.cover() != null && !manifest.cover().isBlank()) {
+                product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
+            }
             gameProductRepository.save(product);
             syncManifestTags(product, manifest.tags());
             return toResponse(product);
@@ -201,6 +204,7 @@ public class AdminGameService {
                             name,
                             root.path("description").asText(null),
                             root.path("entry").asText(null),
+                            root.path("cover").asText(null),
                             root.path("tags")
                     );
                 }
@@ -360,6 +364,7 @@ public class AdminGameService {
             String name,
             String description,
             String entry,
+            String cover,
             JsonNode tags
     ) {
     }

@@ -137,6 +137,9 @@ public class AdminGameService {
                 product.setDescription(manifest.description());
             }
             product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
+            if (manifest.cover() != null && !manifest.cover().isBlank()) {
+                product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
+            }
             gameProductRepository.save(product);
             return toResponse(product);
         } catch (IOException ex) {
@@ -180,7 +183,8 @@ public class AdminGameService {
                             version,
                             name,
                             root.path("description").asText(null),
-                            root.path("entry").asText(null)
+                            root.path("entry").asText(null),
+                            root.path("cover").asText(null)
                     );
                 }
                 zip.closeEntry();
@@ -216,7 +220,8 @@ public class AdminGameService {
             String version,
             String name,
             String description,
-            String entry
+            String entry,
+            String cover
     ) {
     }
 

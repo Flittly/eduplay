@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.Map;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import org.springframework.context.annotation.Profile;
 
@@ -188,6 +189,9 @@ public class GameStoreService {
             }
             product.setVersion(manifest.version());
             product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
+            if (manifest.cover() != null && !manifest.cover().isBlank()) {
+                product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
+            }
             product.setPriceCents(product.getPriceCents() == null ? 0 : product.getPriceCents());
             product.setStatus("ACTIVE");
             gameProductRepository.save(product);
@@ -271,6 +275,58 @@ public class GameStoreService {
             return Files.readAllBytes(pluginPackageService.resolvePackage(gamePackage));
         } catch (Exception ex) {
             throw new BusinessException("PACKAGE_READ_FAILED", "插件包读取失败");
+        }
+    }
+
+    /**
+     * 读取游戏封面：直接从最新已发布插件包 zip 内提取 manifest.cover 指向的文件，
+     * 不落库、不额外占用存储（封面随包走）。未声明 cover 时按约定路径回退查找。
+     */
+    @Transactional(readOnly = true)
+    public CoverFile downloadCover(String gameCode) {
+        GameProduct game = getGame(gameCode);
+        GamePackage gamePackage = packageRepository
+                .findFirstByGameIdOrderByVersionDesc(game.getId())
+                .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
+        try (ZipFile zipFile = new ZipFile(
+                pluginPackageService.resolvePackage(gamePackage).toFile())) {
+            String coverPath = null;
+            ZipEntry manifestEntry = zipFile.getEntry("manifest.json");
+            if (manifestEntry != null) {
+                String content = new String(
+                        zipFile.getInputStream(manifestEntry).readAllBytes(),
+                        StandardCharsets.UTF_8
+                );
+                String cover = jsonMapper.readTree(content).path("cover").asText(null);
+                if (cover != null && !cover.isBlank()) {
+                    coverPath = cover;
+                }
+            }
+            ZipEntry entry = coverPath == null ? null : zipFile.getEntry(coverPath);
+            if (entry == null) {
+                for (String candidate : new String[]{
+                        "web/cover.svg", "web/cover.png", "cover.svg", "cover.png"
+                }) {
+                    entry = zipFile.getEntry(candidate);
+                    if (entry != null) {
+                        break;
+                    }
+                }
+            }
+            if (entry == null) {
+                throw new BusinessException("COVER_NOT_FOUND", "插件包内没有封面文件");
+            }
+            byte[] bytes = zipFile.getInputStream(entry).readAllBytes();
+            String name = entry.getName().toLowerCase(Locale.ROOT);
+            String contentType = name.endsWith(".png") ? "image/png"
+                    : name.endsWith(".jpg") || name.endsWith(".jpeg") ? "image/jpeg"
+                    : name.endsWith(".webp") ? "image/webp"
+                    : "image/svg+xml";
+            return new CoverFile(bytes, contentType);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BusinessException("PACKAGE_READ_FAILED", "封面读取失败");
         }
     }
 
@@ -409,6 +465,7 @@ public class GameStoreService {
                             name,
                             root.path("description").asText(null),
                             root.path("entry").asText(null),
+                            root.path("cover").asText(null),
                             root.path("tags")
                     );
                 }
@@ -530,7 +587,11 @@ public class GameStoreService {
             String name,
             String description,
             String entry,
+            String cover,
             JsonNode tags
     ) {
+    }
+
+    public record CoverFile(byte[] content, String contentType) {
     }
 }

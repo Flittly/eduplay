@@ -692,6 +692,22 @@ a:focus-visible {
   box-shadow: 2px 2px 0 var(--blue);
 }
 
+/* 游戏封面（随插件包分发），无封面时回退到 emoji 图标 */
+.game-cover {
+  width: 46px;
+  height: 46px;
+  margin-bottom: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper, #f7f1e3);
+  object-fit: cover;
+  box-shadow: 2px 2px 0 var(--blue);
+}
+
+.game-card-with-actions .game-card-head .game-cover {
+  margin-bottom: 0;
+}
+
 .game-card h3 {
   margin: 0 0 8px;
   font-size: 20px;
