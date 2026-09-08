@@ -31,7 +31,7 @@ function resolveJar() {
 
   const candidates = [
 
-    path.join(__dirname, "..", "backend", "target", "eduplay-backend-1.1.0.jar")
+    path.join(__dirname, "..", "backend", "target", "eduplay-backend.jar")
   ];
   return candidates.find((candidate) => fs.existsSync(candidate));
 }

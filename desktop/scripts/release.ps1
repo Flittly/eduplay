@@ -43,6 +43,7 @@ try {
   Pop-Location
 }
 
-$installer = Join-Path $desktopDir 'release\EduPlay Setup 1.1.0.exe'
+$pkg = Get-Content (Join-Path $desktopDir 'package.json') -Raw | ConvertFrom-Json
+$installer = Join-Path $desktopDir "release\EduPlay Setup $($pkg.version).exe"
 Write-Output ''
 Write-Output "Done. Installer: $installer"

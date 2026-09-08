@@ -27,7 +27,7 @@
     ],
     "extraResources": [
       {
-        "from": "../backend/target/eduplay-backend-1.1.0.jar",
+        "from": "../backend/target/eduplay-backend.jar",
         "to": "app.jar"
       },
       {
