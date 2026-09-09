@@ -11,11 +11,15 @@ yarn-error.log*
 
 # Desktop build output
 **/release/
+**/release-clean/
+**/win-unpacked/
+**/win-unpacked.tmp/
 **/runtime/
 **/runtime.tmp/
 *.log
 *.db
 *.bak
+*.tmp
 
 # Editor / OS
 .vscode/
@@ -23,3 +27,6 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 .env*
+
+# WorkBuddy 工作区数据（本地会话日志与项目记忆）
+.workbuddy/

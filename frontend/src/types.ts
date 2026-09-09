@@ -118,6 +118,8 @@ export interface StudentPointsLedger {
   amount: number;
   balanceAfter: number;
   bizType: string;
+  gameCode: string | null;
+  gameName: string | null;
   createdAt: string;
 }
 

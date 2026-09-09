@@ -8,13 +8,48 @@ import {
   listStudentClasses,
   listStudents
 } from "../api";
-import type { Student, StudentPointsDetail } from "../types";
+import type {
+  Student,
+  StudentPointsDetail,
+  StudentPointsLedger
+} from "../types";
 
 type SortKey = "name" | "studentNo" | "className" | "totalPoints";
 type SortDirection = "asc" | "desc";
 
 interface StudentPointsPageProps {
   token: string;
+}
+
+const CHANGE_TYPE_LABELS: Record<string, string> = {
+  GAME_EARN: "游戏得分",
+  MANUAL_EARN: "手动加分",
+  MANUAL_DEDUCT: "手动扣分",
+  INIT: "初始积分"
+};
+
+const CHANGE_TYPE_CLASS: Record<string, string> = {
+  GAME_EARN: "ledger-type-game",
+  MANUAL_EARN: "ledger-type-earn",
+  MANUAL_DEDUCT: "ledger-type-deduct",
+  INIT: "ledger-type-init"
+};
+
+function ledgerTypeLabel(changeType: string): string {
+  return CHANGE_TYPE_LABELS[changeType] ?? changeType;
+}
+
+function ledgerReason(item: StudentPointsLedger): string {
+  if (item.changeType === "GAME_EARN") {
+    return item.gameName ?? "游戏得分";
+  }
+  if (item.changeType === "MANUAL_EARN" || item.changeType === "MANUAL_DEDUCT") {
+    return item.bizType === "MANUAL_ADJUST" ? "手动调整" : item.bizType;
+  }
+  if (item.changeType === "INIT") {
+    return item.bizType === "STUDENT_IMPORT" ? "导入学生" : "初始积分";
+  }
+  return item.bizType;
 }
 
 export default function StudentPointsPage({ token }: StudentPointsPageProps) {
@@ -320,16 +355,25 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
                   <th>类型</th>
                   <th>变动</th>
                   <th>变动后</th>
-                  <th>原因</th>
+                  <th>原因 / 来源</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedDetail.ledger.map((item) => (
                   <tr key={item.id}>
-                    <td>{item.changeType}</td>
+                    <td>
+                      <span
+                        className={`ledger-type-badge ${
+                          CHANGE_TYPE_CLASS[item.changeType] ??
+                          "ledger-type-other"
+                        }`}
+                      >
+                        {ledgerTypeLabel(item.changeType)}
+                      </span>
+                    </td>
                     <td>{item.amount > 0 ? `+${item.amount}` : item.amount}</td>
                     <td>{item.balanceAfter}</td>
-                    <td>{item.bizType}</td>
+                    <td>{ledgerReason(item)}</td>
                   </tr>
                 ))}
               </tbody>

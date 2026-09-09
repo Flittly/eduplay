@@ -88,6 +88,8 @@ export default function GamePage({ token }: GamePageProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [pickMode, setPickMode] = useState<"manual" | "random">("manual");
+  const [randomCount, setRandomCount] = useState(1);
   const [started, setStarted] = useState(false);
   const [sessionDone, setSessionDone] = useState(false);
   const [roundLogs, setRoundLogs] = useState<LoggedRound[]>([]);
@@ -307,6 +309,30 @@ export default function GamePage({ token }: GamePageProps) {
     setSelectedStudentIds([]);
   }
 
+  function changePickMode(mode: "manual" | "random") {
+    if (pickMode === mode) {
+      return;
+    }
+    setPickMode(mode);
+    setSelectedStudentIds([]);
+  }
+
+  function drawRandomStudents() {
+    if (visibleStudents.length === 0) {
+      return;
+    }
+    const pool = [...visibleStudents];
+    const count = Math.max(
+      1,
+      Math.min(Math.round(randomCount) || 1, pool.length)
+    );
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    setSelectedStudentIds(pool.slice(0, count).map((student) => student.id));
+  }
+
   function toggleStudent(studentId: number) {
     setSelectedStudentIds((current) =>
       current.includes(studentId)
@@ -477,8 +503,8 @@ export default function GamePage({ token }: GamePageProps) {
       ) : (
         <section className="game-launcher game-launcher-wide">
           <p>
-            选择本次参与拼图的学生（可多选）。多位学生时将在游戏内轮流开始，
-            右侧排行榜按完成用时排名。
+            选择本次参与游戏的学生，支持两种方式：手动勾选，或随机抽取指定人数。
+            多位学生时将在游戏内依次开始，右侧排行榜按完成用时排名。
           </p>
 
           <label className="field">
@@ -499,23 +525,82 @@ export default function GamePage({ token }: GamePageProps) {
           <div className="student-picker-toolbar">
             <strong>学生名单</strong>
             <span>已选 {selectedStudentIds.length} 人</span>
-            <button
-              type="button"
-              className="secondary"
-              disabled={visibleStudents.length === 0}
-              onClick={selectVisibleStudents}
-            >
-              全选当前名单
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={selectedStudentIds.length === 0}
-              onClick={clearSelection}
-            >
-              清空
-            </button>
+            <div className="pick-mode-toggle" role="group" aria-label="选择方式">
+              <button
+                type="button"
+                className={pickMode === "manual" ? "is-active" : ""}
+                onClick={() => changePickMode("manual")}
+              >
+                勾选选择
+              </button>
+              <button
+                type="button"
+                className={pickMode === "random" ? "is-active" : ""}
+                onClick={() => changePickMode("random")}
+              >
+                🎲 随机抽取
+              </button>
+            </div>
+            {pickMode === "manual" ? (
+              <>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={visibleStudents.length === 0}
+                  onClick={selectVisibleStudents}
+                >
+                  全选当前名单
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={selectedStudentIds.length === 0}
+                  onClick={clearSelection}
+                >
+                  清空
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="random-count-field">
+                  抽取人数
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, visibleStudents.length)}
+                    value={randomCount}
+                    disabled={visibleStudents.length === 0}
+                    onChange={(event) =>
+                      setRandomCount(Number(event.target.value) || 1)
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={visibleStudents.length === 0}
+                  onClick={drawRandomStudents}
+                >
+                  随机抽取
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={selectedStudentIds.length === 0}
+                  onClick={clearSelection}
+                >
+                  清空
+                </button>
+              </>
+            )}
           </div>
+
+          {pickMode === "random" && visibleStudents.length > 0 && (
+            <p className="hint">
+              随机抽取模式：点击「随机抽取」将从当前名单中随机抽取指定人数（不重复），
+              结果自动勾选在下方名单中，可反复重新抽取。
+            </p>
+          )}
 
           {students.length === 0 ? (
             <p>
@@ -525,7 +610,13 @@ export default function GamePage({ token }: GamePageProps) {
           ) : visibleStudents.length === 0 ? (
             <p className="hint">该班级还没有学生。</p>
           ) : (
-            <div className="student-picker-list">
+            <div
+              className={
+                pickMode === "random"
+                  ? "student-picker-list is-random"
+                  : "student-picker-list"
+              }
+            >
               {visibleStudents.map((student) => {
                 const checked = selectedStudentIds.includes(student.id);
                 return (
@@ -540,6 +631,7 @@ export default function GamePage({ token }: GamePageProps) {
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={pickMode === "random"}
                       onChange={() => toggleStudent(student.id)}
                     />
                     <span className="student-picker-name">{student.name}</span>

@@ -383,6 +383,44 @@ a:focus-visible {
   cursor: pointer;
 }
 
+/* ===== 积分明细类型徽章 ===== */
+.ledger-type-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ledger-type-game {
+  background: color-mix(in srgb, var(--blue) 14%, var(--paper));
+  border-color: var(--blue);
+}
+
+.ledger-type-earn {
+  background: color-mix(in srgb, var(--green) 16%, var(--paper));
+  border-color: var(--green);
+}
+
+.ledger-type-deduct {
+  background: color-mix(in srgb, var(--pink) 14%, var(--paper));
+  border-color: var(--pink);
+}
+
+.ledger-type-init {
+  background: var(--paper-dim);
+  border-color: var(--ink-weak);
+  color: var(--ink-weak);
+}
+
+.ledger-type-other {
+  background: var(--paper-dim);
+  border-color: var(--ink-weak);
+}
+
 /* ===== 主布局 ===== */
 .app-shell {
   height: 100vh;
@@ -1697,6 +1735,59 @@ a:focus-visible {
   margin-left: auto;
   color: var(--ink-weak);
   font-size: 12px;
+}
+
+/* ---- 学生名单选择方式：勾选 / 随机抽取 ---- */
+.pick-mode-toggle {
+  display: inline-flex;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 2px 2px 0 var(--blue);
+}
+
+.pick-mode-toggle button {
+  border: none;
+  background: var(--paper);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: none;
+  transform: none;
+}
+
+.pick-mode-toggle button + button {
+  border-left: 2px solid var(--ink);
+}
+
+.pick-mode-toggle button.is-active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.random-count-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.random-count-field input {
+  width: 64px;
+  padding: 5px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  font-weight: 800;
+}
+
+.student-picker-list.is-random .student-picker-row {
+  cursor: default;
+}
+
+.student-picker-list.is-random .student-picker-row input {
+  cursor: default;
 }
 
 .result-card .result-table {

@@ -3,6 +3,8 @@ package com.eduplay.student;
 import com.eduplay.auth.AuthService;
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.NotFoundException;
+import com.eduplay.game.GameProduct;
+import com.eduplay.game.GameProductRepository;
 import com.eduplay.user.AppUser;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -34,15 +36,18 @@ public class StudentService {
     private final AuthService authService;
     private final StudentRepository studentRepository;
     private final StudentPointsLedgerRepository ledgerRepository;
+    private final GameProductRepository gameProductRepository;
 
     public StudentService(
             AuthService authService,
             StudentRepository studentRepository,
-            StudentPointsLedgerRepository ledgerRepository
+            StudentPointsLedgerRepository ledgerRepository,
+            GameProductRepository gameProductRepository
     ) {
         this.authService = authService;
         this.studentRepository = studentRepository;
         this.ledgerRepository = ledgerRepository;
+        this.gameProductRepository = gameProductRepository;
     }
 
     @Transactional
@@ -327,13 +332,30 @@ public class StudentService {
         Student student = getOwnedStudent(teacher.getId(), studentId);
         List<StudentPointsLedger> ledgers =
                 ledgerRepository.findByStudentIdOrderByCreatedAtDesc(student.getId());
+        Map<String, String> gameNameByCode = buildGameNameMap(ledgers);
         List<PointsLedgerResponse> ledgerResponses = ledgers.stream()
-                .map(PointsLedgerResponse::from)
+                .map(ledger -> PointsLedgerResponse.from(ledger, gameNameByCode))
                 .toList();
         return new StudentPointsDetailResponse(
                 StudentResponse.from(student),
                 ledgerResponses
         );
+    }
+
+    /**
+     * 批量把流水里出现的 gameCode 映射成游戏名称（含手动导入的游戏），
+     * 避免逐条查询；未登记的 gameCode 返回 null，前端做兜底展示。
+     */
+    private Map<String, String> buildGameNameMap(List<StudentPointsLedger> ledgers) {
+        Map<String, String> result = new LinkedHashMap<>();
+        ledgers.stream()
+                .map(StudentPointsLedger::getGameCode)
+                .filter(code -> code != null && !code.isBlank())
+                .distinct()
+                .forEach(code -> gameProductRepository.findByGameCode(code)
+                        .map(GameProduct::getName)
+                        .ifPresent(name -> result.put(code, name)));
+        return result;
     }
 
     public byte[] createImportTemplate() throws IOException {
@@ -637,15 +659,23 @@ public class StudentService {
             int amount,
             int balanceAfter,
             String bizType,
+            String gameCode,
+            String gameName,
             String createdAt
     ) {
-        public static PointsLedgerResponse from(StudentPointsLedger ledger) {
+        public static PointsLedgerResponse from(
+                StudentPointsLedger ledger,
+                Map<String, String> gameNameByCode
+        ) {
+            String gameCode = ledger.getGameCode();
             return new PointsLedgerResponse(
                     ledger.getId(),
                     ledger.getChangeType(),
                     ledger.getAmount(),
                     ledger.getBalanceAfter(),
                     ledger.getBizType(),
+                    gameCode,
+                    gameCode == null ? null : gameNameByCode.get(gameCode),
                     ledger.getCreatedAt().toString()
             );
         }

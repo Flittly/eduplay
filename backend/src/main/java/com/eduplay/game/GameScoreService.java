@@ -85,6 +85,7 @@ public class GameScoreService {
                 ledger.setBalanceAfter(balanceAfter);
                 ledger.setBizType("GAME_SCORE");
                 ledger.setBizId(roundId);
+                ledger.setGameCode(game.getGameCode());
                 ledger.setIdempotencyKey(idempotencyKey);
                 ledgerRepository.save(ledger);
                 recorded = true;

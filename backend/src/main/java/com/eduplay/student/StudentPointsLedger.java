@@ -45,6 +45,9 @@ public class StudentPointsLedger {
     @Column(name = "biz_id", nullable = false, length = 64)
     private String bizId;
 
+    @Column(name = "game_code", length = 64)
+    private String gameCode;
+
     @Column(name = "idempotency_key", nullable = false, unique = true, length = 64)
     private String idempotencyKey;
 
