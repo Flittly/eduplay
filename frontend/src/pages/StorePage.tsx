@@ -436,21 +436,32 @@ export default function StorePage({ token }: StorePageProps) {
                 </span>
               </div>
 
-              {game.updateAvailable && game.installed ? (
+              {!game.owned ? (
+                <>
+                  <button
+                    className="primary full-button"
+                    disabled={busy}
+                    onClick={() => setRedeemGame(game)}
+                  >
+                    兑换激活码
+                  </button>
+                  {game.installed && (
+                    <button
+                      className="secondary full-button"
+                      disabled={busy}
+                      onClick={() => handleUninstall(game)}
+                    >
+                      {busy ? "处理中..." : "卸载"}
+                    </button>
+                  )}
+                </>
+              ) : game.updateAvailable && game.installed ? (
                 <button
                   className="primary full-button"
                   disabled={busy}
                   onClick={() => handleInstall(game)}
                 >
                   {busy ? "更新中..." : `更新到 ${game.version}`}
-                </button>
-              ) : game.owned && !game.installed ? (
-                <button
-                  className="primary full-button"
-                  disabled={busy}
-                  onClick={() => handleInstall(game)}
-                >
-                  {busy ? "下载安装中..." : "下载并安装"}
                 </button>
               ) : game.installed ? (
                 <button
@@ -464,9 +475,9 @@ export default function StorePage({ token }: StorePageProps) {
                 <button
                   className="primary full-button"
                   disabled={busy}
-                  onClick={() => setRedeemGame(game)}
+                  onClick={() => handleInstall(game)}
                 >
-                  兑换激活码
+                  {busy ? "下载安装中..." : "下载并安装"}
                 </button>
               )}
             </article>

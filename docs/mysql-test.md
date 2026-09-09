@@ -14,7 +14,9 @@ Start-Service MySQL80
 
 ## 2. 创建云端数据库
 
-进入 MySQL：
+默认配置的 JDBC 连接串已带 `createDatabaseIfNotExist=true`，**首次启动会自动建库**，通常无需手动执行本步骤。
+
+如需手动创建（例如想指定字符集），进入 MySQL：
 
 ```powershell
 mysql -u root -p
@@ -37,12 +39,12 @@ cd E:\Self\workspace\eduplay-server
 
 $env:MYSQL_USER='root'
 $env:MYSQL_PASSWORD='123456'
-$env:MYSQL_URL='jdbc:mysql://localhost:3306/eduplay_cloud?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+$env:MYSQL_URL='jdbc:mysql://localhost:3306/eduplay_cloud?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true'
 
 mvn spring-boot:run
 ```
 
-云端后端默认端口 `18080`。
+云端后端默认端口 `17070`。
 
 ## 4. 验证表结构
 
@@ -74,4 +76,4 @@ cd E:\Self\workspace\eduplay\backend
 mvn spring-boot:run
 ```
 
-默认端口 `8080`。学生名单、积分、本机已安装游戏都存在本机 H2。
+默认端口 `7070`。学生名单、积分、本机已安装游戏都存在本机 H2。

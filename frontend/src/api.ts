@@ -31,7 +31,13 @@ async function request<T>(
     }
   });
 
-  const body = (await response.json()) as ApiResponse<T>;
+  let body: ApiResponse<T>;
+  try {
+    body = (await response.json()) as ApiResponse<T>;
+  } catch {
+    // 响应体为空或非 JSON：多为服务未启动、代理目标不可达
+    throw new Error("服务无响应，请确认后端服务已启动");
+  }
 
   if (!response.ok || !body.success) {
     throw new Error(body.message || "请求失败");

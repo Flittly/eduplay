@@ -1448,6 +1448,11 @@ a:focus-visible {
   font-weight: 700;
 }
 
+/* 卡片内纵向堆叠的按钮之间的间距 */
+.store-card .full-button + .full-button {
+  margin-top: 12px;
+}
+
 .full-button {
   width: 100%;
 }
