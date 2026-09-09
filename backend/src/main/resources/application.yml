@@ -14,7 +14,7 @@ spring:
       max-request-size: 10MB
 
 server:
-  port: 8080
+  port: 7070
 
 eduplay:
   plugins:

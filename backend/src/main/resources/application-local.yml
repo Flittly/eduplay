@@ -13,4 +13,4 @@ spring:
 
 eduplay:
   cloud:
-    base-url: ${EDUPLAY_CLOUD_URL:http://localhost:18080}
+    base-url: ${EDUPLAY_CLOUD_URL:http://localhost:17070}
