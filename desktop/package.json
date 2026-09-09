@@ -1,6 +1,6 @@
 {
   "name": "eduplay-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "EduPlay 老师端桌面壳：启动本地 Java 后端并打开原生窗口",
   "main": "main.js",
   "author": "EduPlay",

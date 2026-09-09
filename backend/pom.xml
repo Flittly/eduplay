@@ -13,7 +13,7 @@
 
     <groupId>com.eduplay</groupId>
     <artifactId>eduplay-backend</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <name>eduplay-backend</name>
     <description>EduPlay geographic education game platform backend</description>
 
