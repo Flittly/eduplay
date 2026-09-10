@@ -14,11 +14,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
@@ -69,21 +72,106 @@ public class GameStoreService {
                 entitlementRepository.findByUserIdAndStatus(teacher.getId(), "ACTIVE");
         List<UserGameInstall> installs = installRepository.findByUserId(teacher.getId());
 
+        // 1 次批量查询，替代每个游戏各查一次最新版本
+        Map<Long, String> latestVersionByGame = latestVersionsOf(
+                products.stream().map(GameProduct::getId).toList()
+        );
+
         return products.stream()
-                .map(game -> toStoreGame(game, entitlements, installs))
+                .map(game -> toStoreGame(game, entitlements, installs, latestVersionByGame))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<InstalledGameResponse> listInstalledGames(String authorizationHeader) {
         AppUser teacher = requireTeacher(authorizationHeader);
-        return installRepository.findByUserId(teacher.getId()).stream()
-                .map(install -> gameProductRepository.findById(install.getGameId())
-                        .filter(game -> "ACTIVE".equals(game.getStatus()))
-                        .map(game -> toInstalledGame(game, install))
-                        .orElse(null))
+
+        // ① 1 次：找出要展示的安装记录
+        List<UserGameInstall> installs = installRepository.findByUserId(teacher.getId());
+        if (installs.isEmpty()) {
+            return List.of();
+        }
+        List<Long> gameIds = installs.stream()
+                .map(UserGameInstall::getGameId)
+                .distinct()
+                .toList();
+
+        // ② 1 次：批量拿游戏（替代 N 次 findById），ACTIVE 过滤条件保持不变
+        Map<Long, GameProduct> gameById = gameProductRepository.findAllById(gameIds).stream()
+                .filter(game -> "ACTIVE".equals(game.getStatus()))
+                .collect(Collectors.toMap(GameProduct::getId, Function.identity()));
+
+        // ③ 1 次：批量拿各游戏最新版本（替代 N 次 findFirstByGameIdOrderByVersionDesc）
+        Map<Long, String> latestVersionByGame = latestVersionsOf(gameIds);
+
+        // ④ 1 次：批量拿标签关联
+        List<GameProductTag> tagLinks = productTagRepository.findByGameIdIn(gameIds);
+        Map<Long, List<GameProductTag>> tagLinksByGame = tagLinks.stream()
+                .collect(Collectors.groupingBy(GameProductTag::getGameId));
+
+        // ⑤ 1 次：批量拿标签本体（替代 N×M 次 findById）
+        Map<Long, GameTag> tagById = tagRepository
+                .findAllById(tagLinks.stream().map(GameProductTag::getTagId).distinct().toList())
+                .stream()
+                .collect(Collectors.toMap(GameTag::getId, Function.identity()));
+
+        // ⑥ 0 次查询：全部在内存中组装
+        Map<Long, UserGameInstall> installByGame = installs.stream()
+                .collect(Collectors.toMap(
+                        UserGameInstall::getGameId,
+                        Function.identity(),
+                        (first, second) -> first
+                ));
+
+        return gameIds.stream()
+                .map(gameId -> {
+                    GameProduct game = gameById.get(gameId);
+                    UserGameInstall install = installByGame.get(gameId);
+                    if (game == null || install == null) {
+                        return null;
+                    }
+                    return toInstalledGame(
+                            game,
+                            install,
+                            latestVersionByGame,
+                            tagLinksByGame,
+                            tagById
+                    );
+                })
                 .filter(Objects::nonNull)
                 .toList();
+    }
+
+    /**
+     * 批量取多个游戏的最新版本号，1 次查询返回 Map（gameId → version）。
+     * 空集合直接返回空 Map，避免不同数据库对 {@code IN ()} 的处理差异。
+     */
+    private Map<Long, String> latestVersionsOf(List<Long> gameIds) {
+        if (gameIds.isEmpty()) {
+            return Map.of();
+        }
+        return packageRepository.findLatestVersions(gameIds).stream()
+                .collect(Collectors.toMap(
+                        GamePackage::getGameId,
+                        GamePackage::getVersion,
+                        (first, second) -> first
+                ));
+    }
+
+    /**
+     * 取某个游戏的最新版本号。已预取时走内存（0 次查询），
+     * 否则回退为单次查询——与改造前的行为完全一致。
+     */
+    private String latestVersionOf(GameProduct game, Map<Long, String> latestVersionByGame) {
+        if (latestVersionByGame != null) {
+            String preloaded = latestVersionByGame.get(game.getId());
+            if (preloaded != null) {
+                return preloaded;
+            }
+        }
+        return packageRepository.findFirstByGameIdOrderByVersionDesc(game.getId())
+                .map(GamePackage::getVersion)
+                .orElse(game.getVersion());
     }
 
     @Transactional
@@ -365,6 +453,15 @@ public class GameStoreService {
             List<UserEntitlement> entitlements,
             List<UserGameInstall> installs
     ) {
+        return toStoreGame(game, entitlements, installs, null);
+    }
+
+    private StoreGameResponse toStoreGame(
+            GameProduct game,
+            List<UserEntitlement> entitlements,
+            List<UserGameInstall> installs,
+            Map<Long, String> latestVersionByGame
+    ) {
         UserEntitlement entitlement = entitlements.stream()
                 .filter(item -> item.getGameId().equals(game.getId()))
                 .findFirst()
@@ -373,9 +470,7 @@ public class GameStoreService {
                 .filter(item -> item.getGameId().equals(game.getId()))
                 .findFirst()
                 .orElse(null);
-        String latestVersion = packageRepository.findFirstByGameIdOrderByVersionDesc(game.getId())
-                .map(GamePackage::getVersion)
-                .orElse(game.getVersion());
+        String latestVersion = latestVersionOf(game, latestVersionByGame);
         boolean updateAvailable = install != null
                 && !Objects.equals(install.getInstalledVersion(), latestVersion);
 
@@ -397,11 +492,12 @@ public class GameStoreService {
 
     private InstalledGameResponse toInstalledGame(
             GameProduct game,
-            UserGameInstall install
+            UserGameInstall install,
+            Map<Long, String> latestVersionByGame,
+            Map<Long, List<GameProductTag>> tagLinksByGame,
+            Map<Long, GameTag> tagById
     ) {
-        String latestVersion = packageRepository.findFirstByGameIdOrderByVersionDesc(game.getId())
-                .map(GamePackage::getVersion)
-                .orElse(game.getVersion());
+        String latestVersion = latestVersionOf(game, latestVersionByGame);
         return new InstalledGameResponse(
                 game.getId(),
                 game.getGameCode(),
@@ -412,16 +508,20 @@ public class GameStoreService {
                 install.getInstalledVersion(),
                 install.getStatus(),
                 !Objects.equals(install.getInstalledVersion(), latestVersion),
-                tagsFor(game.getId())
+                tagsFor(game.getId(), tagLinksByGame, tagById)
         );
     }
 
-    private List<TagItem> tagsFor(Long gameId) {
-        return productTagRepository.findByGameId(gameId).stream()
-                .map(link -> tagRepository.findById(link.getTagId()).orElse(null))
+    private List<TagItem> tagsFor(
+            Long gameId,
+            Map<Long, List<GameProductTag>> tagLinksByGame,
+            Map<Long, GameTag> tagById
+    ) {
+        return tagLinksByGame.getOrDefault(gameId, List.of()).stream()
+                .map(link -> tagById.get(link.getTagId()))
                 .filter(Objects::nonNull)
                 .filter(tag -> "ACTIVE".equals(tag.getStatus()))
-                .sorted(java.util.Comparator.comparing(GameTag::getCategory)
+                .sorted(Comparator.comparing(GameTag::getCategory)
                         .thenComparing(GameTag::getSortOrder))
                 .map(tag -> new TagItem(tag.getCategory(), tag.getName()))
                 .toList();
