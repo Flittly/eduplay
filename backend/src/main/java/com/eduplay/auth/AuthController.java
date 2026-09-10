@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,9 +33,29 @@ public class AuthController {
                 request.nickname(),
                 request.role(),
                 request.studentNo(),
-                request.className()
+                request.className(),
+                request.phone(),
+                request.email(),
+                request.gender(),
+                request.birthday()
         );
         return ApiResponse.ok(authService.registerLocal(serviceRequest));
+    }
+
+    @PutMapping("/profile")
+    public ApiResponse<UserResponse> updateProfile(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody UpdateProfileRequest request
+    ) {
+        AuthService.UpdateProfileRequest serviceRequest =
+                new AuthService.UpdateProfileRequest(
+                        request.nickname(),
+                        request.phone(),
+                        request.email(),
+                        request.gender(),
+                        request.birthday()
+                );
+        return ApiResponse.ok(authService.updateProfile(authorization, serviceRequest));
     }
 
     @PostMapping("/local/login")
@@ -74,7 +95,29 @@ public class AuthController {
             @Size(max = 64, message = "学号不能超过64位")
             String studentNo,
             @Size(max = 64, message = "班级不能超过64位")
-            String className
+            String className,
+            @Size(max = 32, message = "电话号码不能超过32位")
+            String phone,
+            @Size(max = 128, message = "邮箱不能超过128位")
+            String email,
+            @Size(max = 16, message = "性别取值不合法")
+            String gender,
+            @Size(max = 10, message = "生日格式应为 yyyy-MM-dd")
+            String birthday
+    ) {
+    }
+
+    public record UpdateProfileRequest(
+            @Size(max = 64, message = "昵称不能超过64位")
+            String nickname,
+            @Size(max = 32, message = "电话号码不能超过32位")
+            String phone,
+            @Size(max = 128, message = "邮箱不能超过128位")
+            String email,
+            @Size(max = 16, message = "性别取值不合法")
+            String gender,
+            @Size(max = 10, message = "生日格式应为 yyyy-MM-dd")
+            String birthday
     ) {
     }
 

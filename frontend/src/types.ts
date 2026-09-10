@@ -13,6 +13,10 @@ export interface User {
   role: string;
   studentNo: string | null;
   className: string | null;
+  phone: string | null;
+  email: string | null;
+  gender: string | null;
+  birthday: string | null;
 }
 
 export interface StoreGame {
@@ -134,4 +138,12 @@ export interface StudentPointsResponse {
   studentNo: string;
   className: string | null;
   totalPoints: number;
+}
+
+export interface PlatformSettings {
+  version: string;
+  pluginInstallDir: string;
+  serverPort: string;
+  databasePath: string;
+  cloudBaseUrl: string;
 }

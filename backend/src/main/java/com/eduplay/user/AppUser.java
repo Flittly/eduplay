@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "app_user")
@@ -48,6 +49,18 @@ public class AppUser {
 
     @Column(name = "class_name", length = 64)
     private String className;
+
+    @Column(length = 32)
+    private String phone;
+
+    @Column(length = 128)
+    private String email;
+
+    @Column(length = 16)
+    private String gender;
+
+    @Column(name = "birthday")
+    private LocalDate birthday;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

@@ -17,6 +17,10 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [username, setUsername] = useState(saved?.username ?? "");
   const [password, setPassword] = useState(saved?.password ?? "");
   const [nickname, setNickname] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [gender, setGender] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [rememberPassword, setRememberPassword] = useState(Boolean(saved));
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +35,11 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
           : await registerLocal({
               username,
               password,
-              nickname
+              nickname,
+              phone: phone || undefined,
+              email: email || undefined,
+              gender: gender || undefined,
+              birthday: birthday || undefined
             });
       if (mode === "login") {
         if (rememberPassword) {
@@ -131,6 +139,51 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
                   placeholder="例如：王老师"
                 />
               </label>
+              <div className="register-extra">
+                <p className="register-extra-title">以下为选填资料</p>
+                <div className="register-extra-grid">
+                  <label>
+                    电话
+                    <input
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      placeholder="选填"
+                    />
+                  </label>
+                  <label>
+                    邮箱
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="选填"
+                    />
+                  </label>
+                  <label>
+                    性别
+                    <select
+                      value={gender}
+                      onChange={(event) => setGender(event.target.value)}
+                    >
+                      <option value="">保密</option>
+                      <option value="MALE">男</option>
+                      <option value="FEMALE">女</option>
+                      <option value="OTHER">其他</option>
+                    </select>
+                  </label>
+                  <label>
+                    生日
+                    <input
+                      type="date"
+                      value={birthday}
+                      onChange={(event) => setBirthday(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <p className="register-extra-hint">
+                  以后可随时点击左下角个人信息进行修改。
+                </p>
+              </div>
             </>
           )}
 

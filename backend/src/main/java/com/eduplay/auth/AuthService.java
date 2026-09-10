@@ -10,8 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -53,10 +56,64 @@ public class AuthService {
         user.setStatus("ACTIVE");
         user.setStudentNo(request.studentNo());
         user.setClassName(request.className());
+        applyProfile(user, request.nickname(), request.phone(), request.email(),
+                request.gender(), request.birthday());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         userRepository.save(user);
 
         return createSession(user);
+    }
+
+    @Transactional
+    public UserResponse updateProfile(String authorizationHeader, UpdateProfileRequest request) {
+        AppUser user = requireUser(authorizationHeader);
+        applyProfile(user, request.nickname(), request.phone(), request.email(),
+                request.gender(), request.birthday());
+        userRepository.save(user);
+        return UserResponse.from(user);
+    }
+
+    private void applyProfile(
+            AppUser user,
+            String nickname,
+            String phone,
+            String email,
+            String gender,
+            String birthday
+    ) {
+        if (nickname != null) {
+            String trimmed = nickname.trim();
+            user.setNickname(trimmed.isEmpty() ? user.getUsername() : trimmed);
+        }
+        user.setPhone(normalizeNullable(phone));
+        user.setEmail(normalizeNullable(email));
+        if (gender == null || gender.isBlank()) {
+            user.setGender(null);
+        } else {
+            String normalized = gender.trim().toUpperCase(Locale.ROOT);
+            if (!Set.of("MALE", "FEMALE", "OTHER").contains(normalized)) {
+                throw new BusinessException("INVALID_GENDER", "性别取值不合法");
+            }
+            user.setGender(normalized);
+        }
+        String normalizedBirthday = normalizeNullable(birthday);
+        if (normalizedBirthday == null) {
+            user.setBirthday(null);
+        } else {
+            try {
+                user.setBirthday(LocalDate.parse(normalizedBirthday));
+            } catch (DateTimeParseException ex) {
+                throw new BusinessException("INVALID_BIRTHDAY", "生日格式应为 yyyy-MM-dd");
+            }
+        }
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional
@@ -172,7 +229,20 @@ public class AuthService {
             String nickname,
             String role,
             String studentNo,
-            String className
+            String className,
+            String phone,
+            String email,
+            String gender,
+            String birthday
+    ) {
+    }
+
+    public record UpdateProfileRequest(
+            String nickname,
+            String phone,
+            String email,
+            String gender,
+            String birthday
     ) {
     }
 

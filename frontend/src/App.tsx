@@ -12,6 +12,8 @@ import StorePage from "./pages/StorePage";
 import StudentPointsPage from "./pages/StudentPointsPage";
 import StudentRosterPage from "./pages/StudentRosterPage";
 import ToolboxPage from "./pages/ToolboxPage";
+import SettingsPage from "./pages/SettingsPage";
+import { LanguageProvider } from "./i18n";
 import { getCurrentUser, logout } from "./api";
 import type { User } from "./types";
 
@@ -83,7 +85,8 @@ export default function App() {
   }
 
   return (
-    <Routes>
+    <LanguageProvider>
+      <Routes>
       <Route
         path="/login"
         element={
@@ -98,7 +101,12 @@ export default function App() {
       <Route
         element={
           user && token ? (
-            <AppLayout user={user} onLogout={handleLogout} />
+            <AppLayout
+              user={user}
+              token={token}
+              onLogout={handleLogout}
+              onUserUpdated={setUser}
+            />
           ) : (
             <Navigate to="/login" replace />
           )
@@ -144,7 +152,14 @@ export default function App() {
           path="/teacher/classes"
           element={<ClassesPage token={token ?? ""} />}
         />
+        <Route
+          path="/settings"
+          element={
+            <SettingsPage token={token ?? ""} userRole={user?.role ?? ""} />
+          }
+        />
       </Route>
-    </Routes>
+      </Routes>
+    </LanguageProvider>
   );
 }

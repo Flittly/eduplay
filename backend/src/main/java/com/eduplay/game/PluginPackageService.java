@@ -1,6 +1,7 @@
 package com.eduplay.game;
 
 import com.eduplay.common.BusinessException;
+import com.eduplay.settings.SettingsService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -21,14 +22,21 @@ import java.util.zip.ZipInputStream;
 public class PluginPackageService {
 
     private final Path packageDir;
-    private final Path installDir;
+    private final SettingsService settingsService;
 
     public PluginPackageService(
             @Value("${eduplay.plugins.package-dir}") String packageDir,
-            @Value("${eduplay.plugins.install-dir}") String installDir
+            SettingsService settingsService
     ) {
         this.packageDir = Path.of(packageDir).toAbsolutePath().normalize();
-        this.installDir = Path.of(installDir).toAbsolutePath().normalize();
+        this.settingsService = settingsService;
+    }
+
+    /**
+     * 当前插件安装目录（支持运行时在设置页修改，无需重启）。
+     */
+    private Path installDir() {
+        return settingsService.getPluginInstallDir();
     }
 
     public Path resolvePackage(GamePackage gamePackage) {
@@ -59,14 +67,14 @@ public class PluginPackageService {
     public void install(Long userId, GameProduct game, GamePackage gamePackage) {
         try {
             Path packageFile = resolvePackage(gamePackage);
-            Path targetRoot = installDir
+            Path targetRoot = installDir()
                     .resolve(String.valueOf(userId))
                     .resolve(game.getGameCode())
                     .resolve(gamePackage.getVersion())
                     .toAbsolutePath()
                     .normalize();
 
-            if (!targetRoot.startsWith(installDir)) {
+            if (!targetRoot.startsWith(installDir())) {
                 throw new BusinessException("INVALID_INSTALL_PATH", "安装路径不合法");
             }
 
@@ -108,14 +116,14 @@ public class PluginPackageService {
 
     public String readManifest(Long userId, GameProduct game, String version) {
         try {
-            Path manifest = installDir
+            Path manifest = installDir()
                     .resolve(String.valueOf(userId))
                     .resolve(game.getGameCode())
                     .resolve(version)
                     .resolve("manifest.json")
                     .toAbsolutePath()
                     .normalize();
-            if (!manifest.startsWith(installDir) || !Files.isRegularFile(manifest)) {
+            if (!manifest.startsWith(installDir()) || !Files.isRegularFile(manifest)) {
                 return null;
             }
             return Files.readString(manifest, StandardCharsets.UTF_8);
@@ -130,14 +138,14 @@ public class PluginPackageService {
             String version,
             String relativePath
     ) {
-        Path file = installDir
+        Path file = installDir()
                 .resolve(String.valueOf(userId))
                 .resolve(gameCode)
                 .resolve(version)
                 .resolve(relativePath)
                 .toAbsolutePath()
                 .normalize();
-        if (!file.startsWith(installDir) || !Files.isRegularFile(file)) {
+        if (!file.startsWith(installDir()) || !Files.isRegularFile(file)) {
             throw new BusinessException("PLUGIN_FILE_NOT_FOUND", "插件资源文件不存在");
         }
         return file;
@@ -145,12 +153,12 @@ public class PluginPackageService {
 
     public void uninstall(Long userId, String gameCode) {
         try {
-            Path target = installDir
+            Path target = installDir()
                     .resolve(String.valueOf(userId))
                     .resolve(gameCode)
                     .toAbsolutePath()
                     .normalize();
-            if (target.startsWith(installDir)) {
+            if (target.startsWith(installDir())) {
                 deleteRecursively(target);
             }
         } catch (IOException ex) {

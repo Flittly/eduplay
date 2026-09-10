@@ -4,7 +4,6 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiTarget = env.VITE_PROXY_TARGET ?? "http://localhost:7070";
-  const cloudApiTarget = env.VITE_CLOUD_PROXY_TARGET ?? "http://localhost:17070";
 
   return {
     plugins: [react()],
@@ -15,10 +14,11 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: true
         },
+        // 云端请求统一走本地后端的 CloudApiProxyController 转发，
+        // 这样设置页配置的云端地址在开发模式与打包版行为一致
         "/cloud-api": {
-          target: cloudApiTarget,
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/cloud-api/, "")
+          target: apiTarget,
+          changeOrigin: true
         }
       }
     }

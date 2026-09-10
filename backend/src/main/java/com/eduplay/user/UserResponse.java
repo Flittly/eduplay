@@ -8,7 +8,11 @@ public record UserResponse(
         String role,
         String studentNo,
         String className,
-        String status
+        String status,
+        String phone,
+        String email,
+        String gender,
+        String birthday
 ) {
     public static UserResponse from(AppUser user) {
         return new UserResponse(
@@ -19,7 +23,11 @@ public record UserResponse(
                 user.getRole(),
                 user.getStudentNo(),
                 user.getClassName(),
-                user.getStatus()
+                user.getStatus(),
+                user.getPhone(),
+                user.getEmail(),
+                user.getGender(),
+                user.getBirthday() == null ? null : user.getBirthday().toString()
         );
     }
 }

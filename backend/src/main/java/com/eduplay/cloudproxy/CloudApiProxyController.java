@@ -2,7 +2,6 @@ package com.eduplay.cloudproxy;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,8 +26,11 @@ public class CloudApiProxyController {
             "Content-Type"
     );
 
-    @Value("${eduplay.cloud.base-url}")
-    private String cloudBaseUrl;
+    private final com.eduplay.settings.SettingsService settingsService;
+
+    public CloudApiProxyController(com.eduplay.settings.SettingsService settingsService) {
+        this.settingsService = settingsService;
+    }
 
     @RequestMapping("/**")
     public void proxy(
@@ -37,7 +39,7 @@ public class CloudApiProxyController {
     ) throws IOException {
         String path = request.getRequestURI().substring("/cloud-api".length());
         String query = request.getQueryString();
-        String target = cloudBaseUrl
+        String target = settingsService.getCloudBaseUrl()
                 + path
                 + (query == null || query.isBlank() ? "" : "?" + query);
 

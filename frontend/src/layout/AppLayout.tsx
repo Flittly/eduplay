@@ -4,6 +4,7 @@ import {
   LogOut,
   Map,
   School,
+  Settings,
   ShoppingBag,
   UserCog,
   Users,
@@ -11,15 +12,29 @@ import {
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import InfoDialog from "../components/InfoDialog";
+import ProfileDialog from "../components/ProfileDialog";
+import { useTranslation } from "../i18n";
 import type { User } from "../types";
 
 interface AppLayoutProps {
   user: User;
+  token: string;
   onLogout: () => void;
+  onUserUpdated: (user: User) => void;
 }
 
-export default function AppLayout({ user, onLogout }: AppLayoutProps) {
+export default function AppLayout({
+  user,
+  token,
+  onLogout,
+  onUserUpdated
+}: AppLayoutProps) {
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const { t } = useTranslation();
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `side-link ${isActive ? "active" : ""}`;
 
   return (
     <>
@@ -38,94 +53,78 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
           </div>
 
           <nav className="side-nav">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `side-link ${isActive ? "active" : ""}`
-              }
-            >
+            <NavLink to="/" className={navLinkClass}>
               <Map size={18} />
-              <span>游戏中心</span>
+              <span>{t("nav.games")}</span>
             </NavLink>
 
-            <NavLink
-              to="/store"
-              className={({ isActive }) =>
-                `side-link ${isActive ? "active" : ""}`
-              }
-            >
+            <NavLink to="/store" className={navLinkClass}>
               <ShoppingBag size={18} />
-              <span>游戏商城</span>
+              <span>{t("nav.store")}</span>
             </NavLink>
 
             {user.role === "TEACHER" && (
-              <NavLink
-                to="/teacher/points"
-                className={({ isActive }) =>
-                  `side-link ${isActive ? "active" : ""}`
-                }
-              >
+              <NavLink to="/teacher/points" className={navLinkClass}>
                 <Users size={18} />
-                <span>学生积分</span>
+                <span>{t("nav.points")}</span>
               </NavLink>
             )}
 
             {user.role === "TEACHER" && (
-              <NavLink
-                to="/teacher/students"
-                className={({ isActive }) =>
-                  `side-link ${isActive ? "active" : ""}`
-                }
-              >
+              <NavLink to="/teacher/students" className={navLinkClass}>
                 <UserCog size={18} />
-                <span>学生管理</span>
+                <span>{t("nav.students")}</span>
               </NavLink>
             )}
 
             {user.role === "TEACHER" && (
-              <NavLink
-                to="/teacher/classes"
-                className={({ isActive }) =>
-                  `side-link ${isActive ? "active" : ""}`
-                }
-              >
+              <NavLink to="/teacher/classes" className={navLinkClass}>
                 <School size={18} />
-                <span>班级管理</span>
+                <span>{t("nav.classes")}</span>
               </NavLink>
             )}
 
             {user.role === "TEACHER" && (
-              <NavLink
-                to="/tools"
-                className={({ isActive }) =>
-                  `side-link ${isActive ? "active" : ""}`
-                }
-              >
+              <NavLink to="/tools" className={navLinkClass}>
                 <Wrench size={18} />
-                <span>工具箱</span>
+                <span>{t("nav.tools")}</span>
               </NavLink>
             )}
+
+            <NavLink to="/settings" className={navLinkClass}>
+              <Settings size={18} />
+              <span>{t("nav.settings")}</span>
+            </NavLink>
           </nav>
 
           <div className="sidebar-footer">
-            <div className="sidebar-user">
+            <button
+              className="sidebar-user"
+              type="button"
+              title="点击查看和编辑个人资料"
+              onClick={() => setProfileOpen(true)}
+            >
               <div className="avatar">{user.nickname.slice(0, 1)}</div>
               <div className="user-meta">
                 <strong>{user.nickname}</strong>
-                <span>{user.role === "TEACHER" ? "教师" : "学生"}</span>
+                <span>
+                  {user.role === "TEACHER"
+                    ? t("role.teacher")
+                    : t("role.student")}
+                </span>
               </div>
-            </div>
+            </button>
             <button
               className="about-platform-button"
               type="button"
               onClick={() => setAboutOpen(true)}
             >
               <Info size={16} />
-              关于平台
+              {t("nav.about")}
             </button>
             <button className="logout-button" onClick={onLogout}>
               <LogOut size={16} />
-              退出登录
+              {t("nav.logout")}
             </button>
           </div>
         </aside>
@@ -136,6 +135,18 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
       </div>
 
       {aboutOpen && <InfoDialog onClose={() => setAboutOpen(false)} />}
+
+      {profileOpen && (
+        <ProfileDialog
+          user={user}
+          token={token}
+          onClose={() => setProfileOpen(false)}
+          onUpdated={(updated) => {
+            onUserUpdated(updated);
+            setProfileOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }

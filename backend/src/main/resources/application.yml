@@ -17,6 +17,7 @@ server:
   port: 7070
 
 eduplay:
+  version: @project.version@
   plugins:
     package-dir: ${EDUPLAY_PLUGIN_PACKAGE_DIR:./plugins/packages}
     install-dir: ${EDUPLAY_PLUGIN_INSTALL_DIR:./plugins/installed}

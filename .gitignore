@@ -9,6 +9,9 @@ yarn-error.log*
 **/data/
 **/plugins/
 
+# 注意：desktop/build/ 不在此列是有意的——它存放 electron-builder 打包引用的
+# 应用图标（build/icon.ico 等），属于必须提交的源资源，请勿加入忽略规则。
+
 # Desktop build output
 **/release/
 **/release-clean/

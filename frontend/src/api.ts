@@ -11,7 +11,8 @@ import type {
   StudentPointsResponse,
   StudentImportResult,
   StoreGame,
-  User
+  User,
+  PlatformSettings
 } from "./types";
 
 const BASE_URL = "/api/v1";
@@ -53,9 +54,32 @@ export function registerLocal(payload: {
   role?: string;
   studentNo?: string;
   className?: string;
+  phone?: string;
+  email?: string;
+  gender?: string;
+  birthday?: string;
 }): Promise<AuthResult> {
   return request<AuthResult>("/auth/local/register", {
     method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateProfile(
+  token: string,
+  payload: {
+    nickname?: string;
+    phone?: string;
+    email?: string;
+    gender?: string;
+    birthday?: string;
+  }
+): Promise<User> {
+  return request<User>("/auth/profile", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
     body: JSON.stringify(payload)
   });
 }
@@ -486,4 +510,44 @@ export async function cloudDownloadPackage(
   }
 
   return response.blob();
+}
+
+export function getPlatformSettings(token: string): Promise<PlatformSettings> {
+  return request<PlatformSettings>("/settings", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function updatePluginInstallDir(
+  token: string,
+  path: string
+): Promise<PlatformSettings> {
+  return request<PlatformSettings>("/settings/plugin-dir", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ path })
+  });
+}
+
+export async function checkCloudHealth(): Promise<boolean> {
+  try {
+    const response = await fetch(`${CLOUD_BASE_URL}/health`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export function updateCloudBaseUrl(token: string, url: string): Promise<PlatformSettings> {
+  return request<PlatformSettings>("/settings/cloud-url", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ url })
+  });
 }
