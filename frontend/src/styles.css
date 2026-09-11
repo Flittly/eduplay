@@ -1509,6 +1509,51 @@ a:focus-visible {
   justify-self: start;
 }
 
+/* ===== 游戏全屏大屏模式 =====
+   进入全屏时 .game-frame 变成铺满视口的覆盖层（z-index 高于 body::before 的纸纹噪点，
+   盖住侧边栏和页面头部）；若浏览器/Electron 允许，还会进一步把整块屏幕交给它。
+   两种情况下内部布局一致：第一行给工具条，其余全部留给游戏 iframe。 */
+.game-frame.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  background: var(--ink);
+}
+
+.game-frame.is-fullscreen iframe {
+  background: var(--paper);
+}
+
+/* 全屏时锁住底层页面滚动，避免滚轮滚动穿透到背后的工作台 */
+.app-shell:has(.game-frame.is-fullscreen) .app-main {
+  overflow: hidden;
+}
+
+.game-frame-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+  background: var(--paper);
+  border-bottom: 2px solid var(--ink);
+  color: var(--ink);
+}
+
+.game-frame-bar-title {
+  font-weight: 800;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.game-frame-bar-hint {
+  margin-left: auto;
+  color: var(--ink-weak);
+  font-size: 12px;
+}
+
 .hint {
   color: var(--ink-weak);
 }

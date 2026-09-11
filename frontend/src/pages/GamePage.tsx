@@ -1,3 +1,4 @@
+import { Maximize2, Minimize2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -78,9 +79,29 @@ function upsertRounds(
   );
 }
 
+/**
+ * 取出游戏 iframe 的 document（平台与游戏包同源）。
+ * 同源时焦点落在游戏内部，按键事件不会冒泡到平台页面，
+ * 因此需要在游戏的 document 上补挂一次 Esc 监听。
+ * 若将来游戏改为跨域加载，这里会抛异常，兜底返回 null。
+ */
+function readIframeDocument(frame: HTMLIFrameElement | null): Document | null {
+  if (!frame) {
+    return null;
+  }
+  try {
+    return frame.contentDocument;
+  } catch {
+    return null;
+  }
+}
+
 export default function GamePage({ token }: GamePageProps) {
   const { gameCode = "" } = useParams();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const gameFrameRef = useRef<HTMLDivElement | null>(null);
+  // 标记「原生全屏是本次由平台申请的」，退出时才知道需不需要主动调 exitFullscreen
+  const ownsNativeFullscreenRef = useRef(false);
 
   const [installedGame, setInstalledGame] = useState<InstalledGame | null>(null);
   const [manifest, setManifest] = useState<GameManifest | null>(null);
@@ -92,6 +113,7 @@ export default function GamePage({ token }: GamePageProps) {
   const [randomCount, setRandomCount] = useState(1);
   const [started, setStarted] = useState(false);
   const [sessionDone, setSessionDone] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [roundLogs, setRoundLogs] = useState<LoggedRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -241,6 +263,83 @@ export default function GamePage({ token }: GamePageProps) {
       );
     }
   }, [gameCode, installedGame, selectedStudents]);
+
+  /**
+   * 退出全屏：先收掉页面内的大屏覆盖层，再按需关闭原生全屏。
+   * 两者都做，保证「按 Esc 退出」和「点按钮退出」走同一条路径。
+   */
+  const exitFullscreen = useCallback(() => {
+    setIsFullscreen(false);
+    if (ownsNativeFullscreenRef.current && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {
+        // 浏览器/Electron 已自行退出全屏，忽略
+      });
+    }
+    ownsNativeFullscreenRef.current = false;
+  }, []);
+
+  // 进入大屏：请求原生全屏（铺满整块屏幕），失败则退化为页面内覆盖层。
+  // 同时监听 Esc 与 fullscreenchange —— 后者负责「用户按 Esc 让浏览器退出全屏」这条路径。
+  useEffect(() => {
+    if (!isFullscreen) {
+      return;
+    }
+
+    const element = gameFrameRef.current;
+    if (element && typeof element.requestFullscreen === "function") {
+      element
+        .requestFullscreen()
+        .then(() => {
+          ownsNativeFullscreenRef.current = true;
+        })
+        .catch(() => {
+          ownsNativeFullscreenRef.current = false;
+        });
+    }
+
+    const attachedDocs: Document[] = [];
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        exitFullscreen();
+      }
+    }
+
+    function handleFullscreenChange() {
+      if (!document.fullscreenElement) {
+        ownsNativeFullscreenRef.current = false;
+        setIsFullscreen(false);
+      }
+    }
+
+    function attach(doc: Document | null) {
+      if (!doc || attachedDocs.includes(doc)) {
+        return;
+      }
+      // 用捕获阶段，避免被游戏自身的 keydown 处理吞掉
+      doc.addEventListener("keydown", handleEscape, true);
+      attachedDocs.push(doc);
+    }
+
+    attach(document);
+    attach(readIframeDocument(iframeRef.current));
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      for (const doc of attachedDocs) {
+        doc.removeEventListener("keydown", handleEscape, true);
+      }
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, [exitFullscreen, isFullscreen]);
+
+  // 游戏结束 / 返回重选时，不能把大屏状态留到下一局
+  useEffect(() => {
+    if (!started && isFullscreen) {
+      exitFullscreen();
+    }
+  }, [exitFullscreen, isFullscreen, started]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -405,6 +504,24 @@ export default function GamePage({ token }: GamePageProps) {
     );
   }
 
+  // 游戏区顶部：全屏时是工具条，非全屏时是选人提示。
+  // 两者共用一个插槽，保证下面的 iframe 在切换全屏时位置不变、不被重新挂载（否则游戏会重开）。
+  const gameFrameHead = isFullscreen ? (
+    <div className="game-frame-bar">
+      <span className="game-frame-bar-title">{installedGame.name}</span>
+      <span className="game-frame-bar-hint">按 Esc 退出全屏</span>
+      <button className="secondary" type="button" onClick={exitFullscreen}>
+        <Minimize2 size={16} />
+        退出全屏
+      </button>
+    </div>
+  ) : selectedStudents.length > 1 ? (
+    <p className="hint">
+      已选择 {selectedStudents.length} 名学生，请在游戏内依次点名开始；
+      每名学生完成后会自动计入成绩榜。
+    </p>
+  ) : null;
+
   return (
     <div className="page-content">
       <header className="page-header">
@@ -417,6 +534,16 @@ export default function GamePage({ token }: GamePageProps) {
               onClick={backToLauncher}
             >
               返回重选
+            </button>
+          )}
+          {started && playUrl && !isFullscreen && (
+            <button
+              className="secondary button-link"
+              type="button"
+              onClick={() => setIsFullscreen(true)}
+            >
+              <Maximize2 size={16} />
+              全屏显示
             </button>
           )}
         </div>
@@ -477,24 +604,25 @@ export default function GamePage({ token }: GamePageProps) {
           </div>
         </section>
       ) : started && playUrl ? (
-        <div className="game-frame">
-          {selectedStudents.length > 1 && (
-            <p className="hint">
-              已选择 {selectedStudents.length} 名学生，请在游戏内依次点名开始；
-              每名学生完成后会自动计入成绩榜。
-            </p>
-          )}
+        <div
+          ref={gameFrameRef}
+          className={isFullscreen ? "game-frame is-fullscreen" : "game-frame"}
+        >
+          {gameFrameHead}
           <iframe
             ref={iframeRef}
             key={playUrl}
             title={installedGame.name}
             src={playUrl}
+            allowFullScreen
             style={{
               width: "100%",
-              height: selectedStudents.length > 1
-                ? "calc(100vh - 180px)"
-                : "calc(100vh - 150px)",
-              minHeight: 540,
+              height: isFullscreen
+                ? "100%"
+                : selectedStudents.length > 1
+                  ? "calc(100vh - 180px)"
+                  : "calc(100vh - 150px)",
+              minHeight: isFullscreen ? 0 : 540,
               border: "none",
               display: "block"
             }}
