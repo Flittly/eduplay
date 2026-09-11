@@ -27,7 +27,7 @@ $env:MYSQL_PASSWORD="你的密码"
 mvn spring-boot:run
 ```
 
-默认端口：`18080`，可通过 `SERVER_PORT` 环境变量覆盖。
+默认端口：`17070`，可通过 `SERVER_PORT` 环境变量覆盖。
 
 首次启动会自动创建管理员：
 
@@ -36,4 +36,4 @@ mvn spring-boot:run
 密码：admin123
 ```
 
-管理后台前端 `eduplay-admin` 的 Vite 代理已经指向 `http://localhost:18080`，直接运行即可对接。
+管理后台前端 `eduplay-admin` 的 Vite 代理已经指向 `http://localhost:17070`，直接运行即可对接。

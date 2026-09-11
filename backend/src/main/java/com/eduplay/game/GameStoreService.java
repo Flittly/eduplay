@@ -198,18 +198,25 @@ public class GameStoreService {
                     }
                 });
 
+        // 原子占用激活码：并发下只有一个请求能把 UNUSED 翻成 USED，
+        // 另一个影响行数为 0，据此判定"已被使用"。原来的
+        // "查 status → 改 status" 是 check-then-act，两个不同教师并发兑换
+        // 同一个码会双双成功（唯一键 (user_id, game_id) 挡不住不同用户）。
+        Long teacherId = teacher.getId();
+        Long gameId = game.getId();
+        Instant now = Instant.now();
+        int claimed = activationCodeRepository.markUsedIfUnused(code.getId(), teacherId, now);
+        if (claimed == 0) {
+            throw new BusinessException("CODE_ALREADY_USED", "激活码已被使用");
+        }
+
         UserEntitlement entitlement = new UserEntitlement();
-        entitlement.setUserId(teacher.getId());
-        entitlement.setGameId(game.getId());
+        entitlement.setUserId(teacherId);
+        entitlement.setGameId(gameId);
         entitlement.setSource("ACTIVATION_CODE");
         entitlement.setStatus("ACTIVE");
-        entitlement.setGrantedAt(Instant.now());
+        entitlement.setGrantedAt(now);
         entitlementRepository.save(entitlement);
-
-        code.setStatus("USED");
-        code.setUsedByUserId(teacher.getId());
-        code.setUsedAt(Instant.now());
-        activationCodeRepository.save(code);
 
         return new RedeemResult(game.getGameCode(), game.getName(), "ACTIVE");
     }

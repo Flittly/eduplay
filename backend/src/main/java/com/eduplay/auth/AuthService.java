@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -21,6 +20,21 @@ import java.util.UUID;
 public class AuthService {
 
     private static final String TOKEN_PREFIX = "Bearer ";
+
+    /**
+     * 永久登录会话的过期时间哨兵。
+     *
+     * <p>平台面向单个教师、常驻本机使用，登录一次后不应再被要求重新登录，
+     * 因此会话改为永久有效：{@code requireUserByToken} 的过期判断保留不动，
+     * 该时间恒在未来即等价于"永不过期"；将来若要恢复过期策略，只需改回
+     * {@code Instant.now().plus(...)} 一处。
+     *
+     * <p>取 {@code 9999-01-01} 而非 {@code 9999-12-31}：{@code expires_at} 是
+     * 不带时区的 {@code timestamp}，写入时会按 JVM 默认时区换算；东八区下
+     * {@code 9999-12-31T23:59:59Z} 会进位成 10000 年而溢出，留足余量更安全。
+     */
+    private static final Instant PERMANENT_SESSION_EXPIRES_AT =
+            Instant.parse("9999-01-01T00:00:00Z");
 
     private final AppUserRepository userRepository;
     private final LocalSessionRepository sessionRepository;
@@ -182,8 +196,15 @@ public class AuthService {
                 .filter(item -> item.getExpiresAt().isAfter(Instant.now()))
                 .orElseThrow(() -> new BusinessException("UNAUTHORIZED", "登录状态已失效，请重新登录"));
 
-        return userRepository.findById(session.getUserId())
+        AppUser user = userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new NotFoundException("用户不存在"));
+
+        // 会话有效期之外还必须校验账号状态：token 改为永久有效后，
+        // 少了这一句，被禁用的账号就永远踢不出去了。
+        if ("DISABLED".equals(user.getStatus())) {
+            throw new BusinessException("ACCOUNT_DISABLED", "账号已被禁用");
+        }
+        return user;
     }
 
     @Transactional(readOnly = true)
@@ -199,7 +220,7 @@ public class AuthService {
         LocalSession session = new LocalSession();
         session.setUserId(user.getId());
         session.setToken(UUID.randomUUID().toString());
-        session.setExpiresAt(Instant.now().plus(30, ChronoUnit.DAYS));
+        session.setExpiresAt(PERMANENT_SESSION_EXPIRES_AT);
         session.setCreatedAt(Instant.now());
         sessionRepository.save(session);
         return new LoginResult(session.getToken(), UserResponse.from(user));
