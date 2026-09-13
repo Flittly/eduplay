@@ -145,6 +145,10 @@ export default function GamePage({ token }: GamePageProps) {
           if (classNames.length === 1) {
             setSelectedClass(classNames[0]);
           }
+          // 展示型游戏不需要选学生，加载完成后直接进入。
+          if (gameManifest.requiresRoster === false) {
+            setStarted(true);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -243,26 +247,34 @@ export default function GamePage({ token }: GamePageProps) {
   );
 
   const sendInit = useCallback(() => {
-    if (selectedStudents.length > 0 && installedGame) {
-      iframeRef.current?.contentWindow?.postMessage(
-        {
-          source: "eduplay-platform",
-          type: "GAME_INIT",
-          payload: {
-            gameCode,
-            version: installedGame.installedVersion,
-            roster: selectedStudents.map((student) => ({
-              studentId: student.id,
-              studentName: student.name,
-              className: student.className ?? "未分班",
-              studentNo: student.studentNo
-            }))
-          }
-        },
-        window.location.origin
-      );
+    if (!installedGame || !manifest) {
+      return;
     }
-  }, [gameCode, installedGame, selectedStudents]);
+    const needsRoster = manifest.requiresRoster !== false;
+    // 展示型游戏直接发空 roster；积分型游戏必须选过学生才发。
+    if (needsRoster && selectedStudents.length === 0) {
+      return;
+    }
+    iframeRef.current?.contentWindow?.postMessage(
+      {
+        source: "eduplay-platform",
+        type: "GAME_INIT",
+        payload: {
+          gameCode,
+          version: installedGame.installedVersion,
+          roster: needsRoster
+            ? selectedStudents.map((student) => ({
+                studentId: student.id,
+                studentName: student.name,
+                className: student.className ?? "未分班",
+                studentNo: student.studentNo
+              }))
+            : []
+        }
+      },
+      window.location.origin
+    );
+  }, [gameCode, installedGame, manifest, selectedStudents]);
 
   /**
    * 退出全屏：先收掉页面内的大屏覆盖层，再按需关闭原生全屏。
@@ -504,7 +516,10 @@ export default function GamePage({ token }: GamePageProps) {
     );
   }
 
-  // 游戏区顶部：全屏时是工具条，非全屏时是选人提示。
+  // 游戏是否需要选人：manifest.requiresRoster 显式为 false 时直接进入。
+  const needsRoster = manifest.requiresRoster !== false;
+
+  // 游戏区顶部：全屏时是工具条，非全屏时仅对积分型游戏显示选人提示。
   // 两者共用一个插槽，保证下面的 iframe 在切换全屏时位置不变、不被重新挂载（否则游戏会重开）。
   const gameFrameHead = isFullscreen ? (
     <div className="game-frame-bar">
@@ -515,7 +530,7 @@ export default function GamePage({ token }: GamePageProps) {
         退出全屏
       </button>
     </div>
-  ) : selectedStudents.length > 1 ? (
+  ) : needsRoster && selectedStudents.length > 1 ? (
     <p className="hint">
       已选择 {selectedStudents.length} 名学生，请在游戏内依次点名开始；
       每名学生完成后会自动计入成绩榜。
@@ -619,7 +634,7 @@ export default function GamePage({ token }: GamePageProps) {
               width: "100%",
               height: isFullscreen
                 ? "100%"
-                : selectedStudents.length > 1
+                : needsRoster && selectedStudents.length > 1
                   ? "calc(100vh - 180px)"
                   : "calc(100vh - 150px)",
               minHeight: isFullscreen ? 0 : 540,

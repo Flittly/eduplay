@@ -68,6 +68,8 @@ export interface GameManifest {
   entry: string;
   backendPlugin?: string | null;
   description?: string;
+  /** 是否需要平台在进入游戏前选择学生名单；false 表示纯展示型游戏，直接进入。 */
+  requiresRoster?: boolean;
 }
 
 export interface GameScoreResult {
