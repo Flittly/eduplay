@@ -75,6 +75,22 @@ export default function InfoDialog({ game, onClose }: InfoDialogProps) {
         </section>
 
         <section className="info-section">
+          <h3>关注我们</h3>
+          <div className="info-contact-card">
+            <img
+              className="info-contact-qr"
+              src="/xiaohongshu-qr.jpg"
+              alt="奇偶瓜肥小红书二维码"
+            />
+            <div>
+              <p className="info-contact-name">小红书：奇偶瓜肥</p>
+              <p className="info-contact-id">小红书号：11594871358</p>
+              <p>扫码关注，获取平台更新和联系我们。</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="info-section">
           <h3>版权说明</h3>
           <p>
             本平台及其内置游戏均由{PLATFORM_DEVELOPER}

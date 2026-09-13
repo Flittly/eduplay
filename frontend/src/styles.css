@@ -228,6 +228,50 @@ a:focus-visible {
   box-shadow: 2px 2px 0 var(--blue);
 }
 
+.auth-contact-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 360px;
+  margin-top: 30px;
+  padding: 16px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--orange);
+}
+
+.auth-contact-qr {
+  width: 108px;
+  height: auto;
+  border: 2px solid var(--ink);
+  background: #ffffff;
+}
+
+.auth-contact-card strong,
+.auth-contact-card span,
+.auth-contact-card small {
+  display: block;
+}
+
+.auth-contact-card strong {
+  font-weight: 800;
+}
+
+.auth-contact-card span {
+  margin-top: 6px;
+  color: var(--ink-weak);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-contact-card small {
+  margin-top: 8px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .auth-form-side {
   display: flex;
   align-items: center;
@@ -1223,6 +1267,32 @@ a:focus-visible {
   margin: 0;
   color: var(--ink-weak);
   line-height: 1.7;
+}
+
+.info-contact-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.info-contact-qr {
+  width: 132px;
+  height: auto;
+  border: 2px solid var(--ink);
+  background: #ffffff;
+  box-shadow: 3px 3px 0 var(--orange);
+}
+
+.info-contact-name {
+  color: var(--ink) !important;
+  font-weight: 800;
+}
+
+.info-contact-id {
+  margin-top: 6px !important;
+  color: var(--ink) !important;
+  font-weight: 700;
 }
 
 .info-detail {

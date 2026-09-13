@@ -72,6 +72,18 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
             <span>积分保留</span>
             <span>游戏插件</span>
           </div>
+          <div className="auth-contact-card">
+            <img
+              className="auth-contact-qr"
+              src="/xiaohongshu-qr.jpg"
+              alt="奇偶瓜肥小红书二维码"
+            />
+            <div>
+              <strong>小红书：奇偶瓜肥</strong>
+              <span>小红书号：11594871358</span>
+              <small>扫码关注我们</small>
+            </div>
+          </div>
         </div>
       </section>
 
