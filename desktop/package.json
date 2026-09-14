@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win dir -c.directories.output=release-portable",
     "release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1"
   },
   "devDependencies": {

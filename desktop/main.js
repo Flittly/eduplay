@@ -4,6 +4,27 @@ const fs = require("fs");
 const net = require("net");
 const path = require("path");
 
+// ── 便携模式（U 盘运行）───────────────────────────────────────────────
+// 若 exe 同目录存在 portable.txt，就把 Electron 的用户数据目录整体搬到
+// exe 旁边。userData 是「本地数据库 + Chromium 缓存 + localStorage（登录
+// 令牌）」的根目录，改这里等于把学生数据和登录状态一并放进 U 盘。
+//
+// 必须在模块顶层同步执行：app ready 之后 Chromium 的存储路径就已固定，
+// 那时再 setPath 不会生效。
+const exeDir = path.dirname(process.execPath);
+const portableRoot = path.join(exeDir, "userdata");
+
+if (fs.existsSync(path.join(exeDir, "portable.txt"))) {
+  try {
+    fs.mkdirSync(portableRoot, { recursive: true });
+    app.setPath("userData", portableRoot);
+    app.setPath("sessionData", portableRoot);
+  } catch (err) {
+    // U 盘写保护 / 空间不足：退回默认目录，保证程序仍能启动
+    console.error("便携数据目录不可用，已回退到默认目录：", err.message);
+  }
+}
+
 let backendProcess = null;
 let mainWindow = null;
 let currentPort = null;
