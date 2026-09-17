@@ -1,5 +1,15 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+
+// 平台版本号的构建期真源：frontend/package.json 的 version。
+// 用 import.meta.url 定位，避免依赖构建时的工作目录。
+const configDir = dirname(fileURLToPath(import.meta.url));
+const { version: platformVersion } = JSON.parse(
+  readFileSync(resolve(configDir, "package.json"), "utf-8")
+) as { version: string };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -7,6 +17,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    define: {
+      __APP_VERSION__: JSON.stringify(platformVersion)
+    },
     server: {
       port: 5173,
       proxy: {

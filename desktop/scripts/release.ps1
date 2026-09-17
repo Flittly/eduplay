@@ -58,23 +58,16 @@ try {
 $pkg = Get-Content (Join-Path $desktopDir 'package.json') -Raw | ConvertFrom-Json
 $releaseDir = Join-Path $desktopDir 'release'
 $installer = Join-Path $releaseDir "EduPlay Setup $($pkg.version).exe"
-$portableDir = Join-Path $desktopDir 'release-portable\win-unpacked'
-
-# Drop the portable-mode marker next to the exe. main.js redirects the user data
-# directory (local database, cache, login state) to userdata\ beside the exe when
-# this marker is present, which is what makes the folder USB-drive portable.
-# The marker text is kept in a separate UTF-8 file and copied verbatim, so this
-# script stays pure ASCII (PowerShell 5.1 reads BOM-less scripts as ANSI).
-$markerSource = Join-Path $desktopDir 'build\portable-marker.txt'
-if ((Test-Path -LiteralPath $portableDir) -and (Test-Path -LiteralPath $markerSource)) {
-  Copy-Item -LiteralPath $markerSource -Destination (Join-Path $portableDir 'portable.txt') -Force
-  Write-Output "Done. Portable folder: $portableDir"
-  Write-Output '      (portable.txt copied; copy the whole folder to a USB drive to run)'
-} elseif (Test-Path -LiteralPath $portableDir) {
-  Write-Output "Warning: marker template not found at $markerSource"
-} else {
-  Write-Output "Warning: portable folder not found at $portableDir"
-}
+# The folder name comes from package.json (portableDirName). rename-portable.js,
+# which runs as part of npm run dist:portable, renames electron-builder's hard-coded
+# "win-unpacked" output to this name and drops the portable-mode marker inside it.
+$portableDir = Join-Path $desktopDir "release-portable\$($pkg.portableDirName)"
 
 Write-Output ''
 Write-Output "Done. Installer: $installer"
+if (Test-Path -LiteralPath $portableDir) {
+  Write-Output "Done. Portable folder: $portableDir"
+  Write-Output '      (copy that folder to a USB drive to run)'
+} else {
+  Write-Output "Warning: portable folder not found at $portableDir"
+}

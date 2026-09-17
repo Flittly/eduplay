@@ -538,6 +538,14 @@ a:focus-visible {
   font-size: 12px;
 }
 
+/* 平台版本号：紧贴品牌名下方，只显示 vX.Y.Z */
+.brand .brand-version {
+  margin-top: 3px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+
 .side-nav {
   display: flex;
   flex-direction: column;
@@ -2555,8 +2563,20 @@ button.sidebar-user:hover {
 
 .profile-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 16px;
+}
+
+/* Grid 轨道的默认最小尺寸是 auto，会把 input 的固有宽度（约 183px）当成下界，
+   于是两列加起来撑破弹窗/卡片——日期框最明显。显式压到 0，让控件跟随格子宽度。 */
+.profile-grid > label {
+  min-width: 0;
+}
+
+.profile-grid input,
+.profile-grid select {
+  width: 100%;
+  min-width: 0;
 }
 
 .profile-actions {
@@ -2586,8 +2606,19 @@ button.sidebar-user:hover {
 
 .register-extra-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
+}
+
+/* 同上：不压住 min-width 的话，邮箱与生日两个框会伸出卡片右边框。 */
+.register-extra-grid > label {
+  min-width: 0;
+}
+
+.register-extra-grid input,
+.register-extra-grid select {
+  width: 100%;
+  min-width: 0;
 }
 
 .register-extra-grid label {
