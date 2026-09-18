@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RotateCw } from "lucide-react";
 import {
   checkCloudHealth,
   getPlatformSettings,
@@ -7,6 +8,7 @@ import {
 } from "../api";
 import { clearSavedCredentials } from "../rememberCredentials";
 import { useTranslation } from "../i18n";
+import { readStoredTheme, saveTheme, type Theme } from "../theme";
 import { PLATFORM_COPYRIGHT, PLATFORM_DEVELOPER } from "../components/InfoDialog";
 import type { PlatformSettings } from "../types";
 
@@ -19,6 +21,7 @@ type CloudStatus = "checking" | "online" | "offline";
 
 export default function SettingsPage({ token, userRole }: SettingsPageProps) {
   const { lang, setLang, t } = useTranslation();
+  const [theme, setTheme] = useState<Theme>(readStoredTheme);
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [loadError, setLoadError] = useState("");
   const [pluginDirInput, setPluginDirInput] = useState("");
@@ -91,6 +94,19 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
     setNotice(t("settings.data.cleared"));
   }
 
+  function handleThemeChange(next: Theme) {
+    saveTheme(next);
+    setTheme(next);
+  }
+
+  /**
+   * 重新加载界面。等价于浏览器按 F5：登录状态存在 localStorage，
+   * 后端已做前端路由兜底，所以刷新后仍停在当前页面，不会被打回首页。
+   */
+  function handleReload() {
+    window.location.reload();
+  }
+
   return (
     <div className="page-content settings-page">
       <header className="page-header">
@@ -129,6 +145,40 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
               English
             </button>
           </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-row-label">
+            <strong>{t("settings.theme")}</strong>
+            <span>{t("settings.theme.hint")}</span>
+          </div>
+          <div className="language-switch theme-switch">
+            <button
+              type="button"
+              className={theme === "paper" ? "active" : ""}
+              onClick={() => handleThemeChange("paper")}
+            >
+              {t("settings.theme.paper")}
+            </button>
+            <button
+              type="button"
+              className={theme === "white" ? "active" : ""}
+              onClick={() => handleThemeChange("white")}
+            >
+              {t("settings.theme.white")}
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-row-label">
+            <strong>{t("settings.reload")}</strong>
+            <span>{t("settings.reload.hint")}</span>
+          </div>
+          <button className="secondary" type="button" onClick={handleReload}>
+            <RotateCw size={16} />
+            {t("settings.reload.action")}
+          </button>
         </div>
       </section>
 

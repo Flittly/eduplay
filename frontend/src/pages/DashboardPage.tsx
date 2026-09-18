@@ -6,6 +6,7 @@ import {
   uninstallGame
 } from "../api";
 import InfoDialog from "../components/InfoDialog";
+import { useTranslation } from "../i18n";
 import type { InstalledGame } from "../types";
 
 interface DashboardPageProps {
@@ -13,6 +14,7 @@ interface DashboardPageProps {
 }
 
 export default function DashboardPage({ token }: DashboardPageProps) {
+  const { t } = useTranslation();
   const [games, setGames] = useState<InstalledGame[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
@@ -114,8 +116,8 @@ export default function DashboardPage({ token }: DashboardPageProps) {
       <header className="page-header">
         <div>
           <p className="page-kicker">EduPlay</p>
-          <h1>游戏中心</h1>
-          <p>选择一个地理游戏开始学习</p>
+          <h1>{t("pages.dashboard.title")}</h1>
+          <p>{t("pages.dashboard.subtitle")}</p>
         </div>
         <div className="points-card">
           <span>已安装</span>

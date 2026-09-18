@@ -1,14 +1,17 @@
 import { Dices, LayoutGrid, ListChecks } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "../i18n";
 
 export default function ToolboxPage() {
+  const { t } = useTranslation();
+
   return (
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">教学工具</p>
-          <h1>工具箱</h1>
-          <p>课堂里常用的小工具，数据来自本机学生名单</p>
+          <p className="page-kicker">{t("pages.tools.kicker")}</p>
+          <h1>{t("pages.tools.title")}</h1>
+          <p>{t("pages.tools.subtitle")}</p>
         </div>
       </header>
 

@@ -8,6 +8,7 @@ import {
   listStudentClasses,
   listStudents
 } from "../api";
+import { useTranslation } from "../i18n";
 import type {
   Student,
   StudentPointsDetail,
@@ -53,6 +54,7 @@ function ledgerReason(item: StudentPointsLedger): string {
 }
 
 export default function StudentPointsPage({ token }: StudentPointsPageProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [classList, setClassList] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState("ALL");
@@ -191,9 +193,9 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">教学管理</p>
-          <h1>学生积分</h1>
-          <p>查看学生积分，手动增加或扣减课堂积分</p>
+          <p className="page-kicker">{t("pages.points.kicker")}</p>
+          <h1>{t("pages.points.title")}</h1>
+          <p>{t("pages.points.subtitle")}</p>
         </div>
       </header>
 

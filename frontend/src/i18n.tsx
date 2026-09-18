@@ -27,6 +27,36 @@ const dictionaries: Record<Language, Dict> = {
     "role.teacher": "教师",
     "role.student": "学生",
 
+    // 页面头
+    // 约定：kicker 一律是「该页自己的英文名」（与设置页 settings.kicker 同规则），
+    // 中文界面下也保留英文，作为版式上的小标签；title / subtitle 随语言切换。
+    "pages.dashboard.title": "游戏中心",
+    "pages.dashboard.subtitle": "选择一个地理游戏开始学习",
+    "pages.store.title": "游戏商城",
+    "pages.store.subtitle": "商城数据来自云端服务器，学生和积分仍保存在本机",
+    "pages.store.cloudPrefix": "云端：",
+    "pages.points.kicker": "Student Points",
+    "pages.points.title": "学生积分",
+    "pages.points.subtitle": "查看学生积分，手动增加或扣减课堂积分",
+    "pages.students.kicker": "Student Management",
+    "pages.students.title": "学生管理",
+    "pages.students.subtitle": "导入或添加学生，维护班级名单",
+    "pages.classes.kicker": "Class Management",
+    "pages.classes.title": "班级管理",
+    "pages.classes.subtitle": "查看班级人数、课代表、平均积分与最高积分学生",
+    "pages.tools.kicker": "Toolbox",
+    "pages.tools.title": "工具箱",
+    "pages.tools.subtitle": "课堂里常用的小工具，数据来自本机学生名单",
+    "pages.rollcall.kicker": "Roll Call",
+    "pages.rollcall.title": "课堂点名",
+    "pages.rollcall.subtitle": "点击姓名切换状态，点到右边即表示已点名",
+    "pages.randompick.kicker": "Random Pick",
+    "pages.randompick.title": "随机点名",
+    "pages.randompick.subtitle": "从学生名单中随机抽取一名同学，学号姓名大屏展示",
+    "pages.seating.kicker": "Seating Chart",
+    "pages.seating.title": "座位表",
+    "pages.seating.subtitle": "设置排数和列数，安排或随机排座位",
+
     // 设置页
     "settings.kicker": "Settings",
     "settings.title": "设置",
@@ -34,6 +64,15 @@ const dictionaries: Record<Language, Dict> = {
     "settings.section.general": "通用",
     "settings.language": "界面语言",
     "settings.language.hint": "界面语言切换后立即生效；各业务页面将逐步支持英文。",
+    "settings.theme": "背景主题",
+    "settings.theme.hint":
+      "选择界面底色：米黄纸张（默认，偏暖）或纯白（对比更干净）。切换后立即生效并记住选择。",
+    "settings.theme.paper": "米黄纸张",
+    "settings.theme.white": "纯白",
+    "settings.reload": "重新加载界面",
+    "settings.reload.hint":
+      "界面卡住、显示异常或改了设置没生效时点一下，等同于浏览器按 F5。登录状态和本机学生数据都会保留；正在进行的游戏会重开一局。",
+    "settings.reload.action": "重新加载",
     "settings.section.plugins": "游戏安装位置",
     "settings.plugins.current": "当前目录",
     "settings.plugins.hint":
@@ -77,6 +116,41 @@ const dictionaries: Record<Language, Dict> = {
     "role.teacher": "Teacher",
     "role.student": "Student",
 
+    // Page headers — kicker is always the page's own English name
+    "pages.dashboard.title": "Game Center",
+    "pages.dashboard.subtitle": "Pick a geography game and start learning",
+    "pages.store.title": "Game Store",
+    "pages.store.subtitle":
+      "Store data comes from the cloud; students and points stay on this device",
+    "pages.store.cloudPrefix": "Cloud: ",
+    "pages.points.kicker": "Student Points",
+    "pages.points.title": "Student Points",
+    "pages.points.subtitle":
+      "Review student points and adjust classroom scores by hand",
+    "pages.students.kicker": "Student Management",
+    "pages.students.title": "Student Management",
+    "pages.students.subtitle": "Import or add students and maintain class rosters",
+    "pages.classes.kicker": "Class Management",
+    "pages.classes.title": "Class Management",
+    "pages.classes.subtitle":
+      "Class size, class representative, average and top points",
+    "pages.tools.kicker": "Toolbox",
+    "pages.tools.title": "Toolbox",
+    "pages.tools.subtitle":
+      "Everyday classroom tools that read the local student roster",
+    "pages.rollcall.kicker": "Roll Call",
+    "pages.rollcall.title": "Roll Call",
+    "pages.rollcall.subtitle":
+      "Tap a name to toggle status; moved to the right means called",
+    "pages.randompick.kicker": "Random Pick",
+    "pages.randompick.title": "Random Pick",
+    "pages.randompick.subtitle":
+      "Draw a random student and show the number and name full-screen",
+    "pages.seating.kicker": "Seating Chart",
+    "pages.seating.title": "Seating Chart",
+    "pages.seating.subtitle":
+      "Set rows and columns, then assign or shuffle the seats",
+
     "settings.kicker": "Settings",
     "settings.title": "Settings",
     "settings.subtitle": "Manage preferences and runtime options",
@@ -84,6 +158,15 @@ const dictionaries: Record<Language, Dict> = {
     "settings.language": "Interface language",
     "settings.language.hint":
       "Applies immediately. Other pages will be localized progressively.",
+    "settings.theme": "Background theme",
+    "settings.theme.hint":
+      "Pick the interface background: warm paper (default) or pure white for a cleaner contrast. Applies and is remembered immediately.",
+    "settings.theme.paper": "Warm paper",
+    "settings.theme.white": "Pure white",
+    "settings.reload": "Reload interface",
+    "settings.reload.hint":
+      "Use this when the interface hangs, renders incorrectly, or a setting seems not to apply. Same as pressing F5 in a browser. Your login and local student data are kept; a game in progress will restart.",
+    "settings.reload.action": "Reload",
     "settings.section.plugins": "Game install location",
     "settings.plugins.current": "Current folder",
     "settings.plugins.hint":

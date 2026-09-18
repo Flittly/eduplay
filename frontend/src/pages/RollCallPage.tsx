@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listStudentClasses, listStudents } from "../api";
+import { useTranslation } from "../i18n";
 import type { Student } from "../types";
 
 interface RollCallPageProps {
@@ -8,6 +9,7 @@ interface RollCallPageProps {
 }
 
 export default function RollCallPage({ token }: RollCallPageProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [classList, setClassList] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState("ALL");
@@ -84,9 +86,9 @@ export default function RollCallPage({ token }: RollCallPageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">工具箱</p>
-          <h1>课堂点名</h1>
-          <p>点击姓名切换状态，点到右边即表示已点名</p>
+          <p className="page-kicker">{t("pages.rollcall.kicker")}</p>
+          <h1>{t("pages.rollcall.title")}</h1>
+          <p>{t("pages.rollcall.subtitle")}</p>
         </div>
         <div className="points-card">
           <span>已点名</span>

@@ -10,6 +10,7 @@ import {
   uninstallGame
 } from "../api";
 import InfoDialog from "../components/InfoDialog";
+import { useTranslation } from "../i18n";
 import {
   clearSavedCredentials,
   loadSavedCredentials,
@@ -34,6 +35,7 @@ function readCloudUser(): User | null {
 }
 
 export default function StorePage({ token }: StorePageProps) {
+  const { t } = useTranslation();
   const [games, setGames] = useState<StoreGame[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
@@ -238,8 +240,8 @@ export default function StorePage({ token }: StorePageProps) {
         <header className="page-header">
           <div>
             <p className="page-kicker">EduPlay Cloud Store</p>
-            <h1>游戏商城</h1>
-            <p>商城数据来自云端服务器，学生和积分仍保存在本机</p>
+            <h1>{t("pages.store.title")}</h1>
+            <p>{t("pages.store.subtitle")}</p>
           </div>
         </header>
 
@@ -342,8 +344,11 @@ export default function StorePage({ token }: StorePageProps) {
       <header className="page-header">
         <div>
           <p className="page-kicker">EduPlay Cloud Store</p>
-          <h1>游戏商城</h1>
-          <p>云端：{cloudUser.username}</p>
+          <h1>{t("pages.store.title")}</h1>
+          <p>
+            {t("pages.store.cloudPrefix")}
+            {cloudUser.username}
+          </p>
         </div>
         <div className="store-actions">
           <span className="points-card">

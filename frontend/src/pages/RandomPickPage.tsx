@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { listStudentClasses, listStudents } from "../api";
+import { useTranslation } from "../i18n";
 import type { Student } from "../types";
 
 interface RandomPickPageProps {
@@ -11,6 +12,7 @@ const ROLL_TICKS = 24;
 const ROLL_INTERVAL_MS = 80;
 
 export default function RandomPickPage({ token }: RandomPickPageProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [classList, setClassList] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState("ALL");
@@ -118,9 +120,9 @@ export default function RandomPickPage({ token }: RandomPickPageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">工具箱</p>
-          <h1>随机点名</h1>
-          <p>从学生名单中随机抽取一名同学，学号姓名大屏展示</p>
+          <p className="page-kicker">{t("pages.randompick.kicker")}</p>
+          <h1>{t("pages.randompick.title")}</h1>
+          <p>{t("pages.randompick.subtitle")}</p>
         </div>
         <div className="points-card">
           <span>已抽到</span>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { deleteClass, listClasses, setClassMonitor } from "../api";
+import { useTranslation } from "../i18n";
 import type { ClassSummary } from "../types";
 
 interface ClassesPageProps {
@@ -7,6 +8,7 @@ interface ClassesPageProps {
 }
 
 export default function ClassesPage({ token }: ClassesPageProps) {
+  const { t } = useTranslation();
   const [classes, setClasses] = useState<ClassSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -71,9 +73,9 @@ export default function ClassesPage({ token }: ClassesPageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">教学管理</p>
-          <h1>班级管理</h1>
-          <p>查看班级人数、课代表、平均积分与最高积分学生</p>
+          <p className="page-kicker">{t("pages.classes.kicker")}</p>
+          <h1>{t("pages.classes.title")}</h1>
+          <p>{t("pages.classes.subtitle")}</p>
         </div>
       </header>
 

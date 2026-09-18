@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EduPlay 地理教育游戏平台</title>
+    <script>
+      // 首屏防闪色：在主包执行前先把主题写到 <html data-theme>，
+      // 否则纯白主题会先闪一下默认的米黄纸张。
+      // 存储键与 src/theme.ts 共用，改名字要同时改两处。
+      try {
+        if (localStorage.getItem("eduplay.theme") === "white") {
+          document.documentElement.dataset.theme = "white";
+        }
+      } catch (error) {
+        /* localStorage 不可用时按默认主题渲染 */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

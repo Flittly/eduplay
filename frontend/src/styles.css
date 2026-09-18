@@ -12,6 +12,20 @@
     "Noto Sans CJK SC", sans-serif;
 }
 
+/* ===== 纯白背景主题 =====
+   由 <html data-theme="white"> 触发（见 src/theme.ts）。
+   只覆盖两个纸张色，其余令牌不动 —— 因此组件尺寸、间距、
+   文字对比度都不受影响，切换主题不会引起任何布局变化。 */
+:root[data-theme="white"] {
+  --paper: #ffffff;
+  --paper-dim: #f4f4f4;
+}
+
+/* 白底上纸张噪点容易显脏，压低一点 */
+:root[data-theme="white"] body::before {
+  opacity: 0.035;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -675,16 +689,91 @@ a:focus-visible {
   margin: 0 auto;
 }
 
+/* ===== 游戏页宽版布局 =====
+   1180px 是给文档类页面用的阅读宽度，游戏要尽可能占满工作区，
+   否则会被这条 max-width 居中后左右各空一大块。
+   只作用于挂了 page-wide 的页面（当前仅 GamePage），其余页面宽度不变。 */
+.page-content.page-wide {
+  max-width: none;
+}
+
+/* 宽版页面把外框内边距收窄，减少游戏四周的无效空白。
+   :has() 与下方全屏锁定用的是同一套写法。 */
+.app-shell:has(.page-wide) .app-main {
+  padding: 16px 20px;
+}
+
+/* ===== 页面头：印刷风横幅 =====
+   原版只有一条 2px 下划线，页面顶部偏空。这里改成一块带描边和硬投影的
+   横幅，并补三样"形状"：
+     1) 右上角粉色网点块（向右上角聚拢，向正文一侧淡出）
+     2) 右侧蓝色圆环轮廓（把横幅中右部的空白组织起来）
+     3) 正文块下方的橙色短规则线（把标题块收住）
+   风格沿用全站已有的 riso 印刷语言（2px 描边、错位硬投影、粉/蓝/橙三色）。
+   全部走伪元素与背景层，所以 12 个页面不用改任何 JSX 就能一起升级。 */
 .page-header {
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 26px;
-  padding-bottom: 18px;
-  border-bottom: 2px solid var(--ink);
+  gap: 22px;
+  margin-bottom: 28px;
+  padding: 22px 26px 26px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  box-shadow: 7px 7px 0 var(--blue);
+  overflow: hidden;
+  /* 必须建独立层叠上下文：z-index:-1 的装饰块只有在
+     「本元素自己就是层叠上下文」时才会落在横幅底色之上、文字之下；
+     否则会退到 .app-shell 底色后面，整个消失。 */
+  isolation: isolate;
+  /* 底色 + 橙色短规则线。规则线放在背景层而不是伪元素上，
+     这样 ::before / ::after 还能各干一件事。
+     位置 = 内边距盒左下角往内 26px、离底 12px，正好吊在副标题下方约 9px。 */
+  background-color: var(--paper);
+  background-image: linear-gradient(var(--orange), var(--orange));
+  background-repeat: no-repeat;
+  background-position: 26px calc(100% - 12px);
+  background-size: 116px 5px;
 }
 
+/* 装饰一：右上角粉色网点块。
+   用 mask 做对角淡出，避免出现一条"被斜着切掉"的硬边——
+   硬边看着像渲染故障，淡出才像有意为之。 */
+.page-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 220px;
+  height: 100%;
+  background-image: radial-gradient(var(--pink) 1.8px, transparent 2.1px);
+  background-size: 11px 11px;
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: -1;
+  -webkit-mask-image: linear-gradient(215deg, #000 12%, transparent 68%);
+  mask-image: linear-gradient(215deg, #000 12%, transparent 68%);
+}
+
+/* 装饰二：右侧蓝色圆环轮廓。低透明度，只作为"套准圆"式的几何装饰。 */
+.page-header::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 104px;
+  width: 168px;
+  height: 168px;
+  margin-top: -84px;
+  border: 2px solid var(--blue);
+  border-radius: 50%;
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 基础 kicker：给弹窗头部（ProfileDialog / InfoDialog）用，保持原有观感。
+   放在页面头下面的 .page-header .page-kicker 之前，页面头里会被后者覆盖。 */
 .page-kicker {
   margin: 0 0 6px;
   color: var(--blue);
@@ -692,16 +781,52 @@ a:focus-visible {
   font-size: 12px;
 }
 
+/* 小标签：按约定放「该页自己的英文页名」（与设置页 settings.kicker 同规则）。
+   选择器必须是 .page-header .page-kicker（0,2,0），
+   否则会被下面的 .page-header p（0,1,1）压掉颜色和外边距 —— 原版
+   .page-kicker 就是这样被压成灰字的。 */
+.page-header .page-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 3px 10px 3px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper-dim);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* kicker 前的粉色色标（带蓝色错位投影） */
+.page-header .page-kicker::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  background: var(--pink);
+  box-shadow: 2px 2px 0 var(--blue);
+}
+
+/* 标题：靠"字号 + 字重 + 横幅"来醒目，不加套印投影。
+   早先试过 2px 2px 0 粉 + -2px -2px 0 蓝的双色错位投影，
+   在大字号下笔画互相穿插，中文字形（如"游戏中心"）会糊成一团，
+   所以这里保持干净的实心字。 */
 .page-header h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 40px;
+  line-height: 1.06;
   font-weight: 800;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  text-shadow: none;
 }
 
 .page-header p {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   color: var(--ink-weak);
 }
 
@@ -2386,6 +2511,14 @@ a:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
+}
+
+/* 同一张卡片里出现多行设置时（当前仅「通用」的语言 + 主题）给一条虚线分隔，
+   只有相邻的两行才生效，单行卡片不受影响。 */
+.settings-row + .settings-row {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--ink-weak);
 }
 
 .settings-row-column {

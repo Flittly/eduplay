@@ -9,6 +9,7 @@ import {
   listStudents,
   updateStudent
 } from "../api";
+import { useTranslation } from "../i18n";
 import type { Student, StudentImportResult } from "../types";
 
 interface StudentRosterPageProps {
@@ -16,6 +17,7 @@ interface StudentRosterPageProps {
 }
 
 export default function StudentRosterPage({ token }: StudentRosterPageProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [classList, setClassList] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState("ALL");
@@ -157,9 +159,9 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">教学管理</p>
-          <h1>学生管理</h1>
-          <p>导入或添加学生，维护班级名单</p>
+          <p className="page-kicker">{t("pages.students.kicker")}</p>
+          <h1>{t("pages.students.title")}</h1>
+          <p>{t("pages.students.subtitle")}</p>
         </div>
       </header>
 

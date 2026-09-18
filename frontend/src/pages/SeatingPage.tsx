@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listStudentClasses, listStudents } from "../api";
+import { useTranslation } from "../i18n";
 import type { Student } from "../types";
 
 interface SeatingPageProps {
@@ -51,6 +52,7 @@ function resizeSeats(
 }
 
 export default function SeatingPage({ token }: SeatingPageProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [classList, setClassList] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState("ALL");
@@ -193,9 +195,9 @@ export default function SeatingPage({ token }: SeatingPageProps) {
     <div className="page-content">
       <header className="page-header">
         <div>
-          <p className="page-kicker">工具箱</p>
-          <h1>座位表</h1>
-          <p>设置排数和列数，安排或随机排座位</p>
+          <p className="page-kicker">{t("pages.seating.kicker")}</p>
+          <h1>{t("pages.seating.title")}</h1>
+          <p>{t("pages.seating.subtitle")}</p>
         </div>
       </header>
 

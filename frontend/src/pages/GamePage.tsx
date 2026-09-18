@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -117,6 +117,10 @@ export default function GamePage({ token }: GamePageProps) {
   const [roundLogs, setRoundLogs] = useState<LoggedRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // 每次「重新加载游戏」加一，配合 iframe 的 key 强制重挂载 ——
+  // 比在游戏内部调 location.reload() 更彻底：游戏包自己卡住时，
+  // 那段 JS 可能已经跑不动了，只有平台侧把它换掉才救得回来。
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -480,6 +484,19 @@ export default function GamePage({ token }: GamePageProps) {
     setError("");
   }
 
+  /**
+   * 重新加载游戏：只把游戏 iframe 换掉，平台状态（登录、当前页面、已选学生、
+   * 已结算的成绩榜）全部保留。新 iframe 加载完会重新发 GAME_READY，
+   * 平台按原来的名单再发一次 GAME_INIT，等同于「重开这一局」。
+   *
+   * 为什么走「重挂载」而不是在游戏内部调 location.reload()：
+   * 游戏卡住时它自己那段 JS 很可能已经跑不动了，只有平台侧把它整个换掉才救得回来。
+   */
+  function reloadGame() {
+    setError("");
+    setReloadNonce((current) => current + 1);
+  }
+
   const entry = manifest?.entry?.replace(/^\/+/, "") ?? "";
   const playUrl =
     started && installedGame && entry
@@ -525,6 +542,10 @@ export default function GamePage({ token }: GamePageProps) {
     <div className="game-frame-bar">
       <span className="game-frame-bar-title">{installedGame.name}</span>
       <span className="game-frame-bar-hint">按 Esc 退出全屏</span>
+      <button className="secondary" type="button" onClick={reloadGame}>
+        <RotateCw size={16} />
+        重新加载游戏
+      </button>
       <button className="secondary" type="button" onClick={exitFullscreen}>
         <Minimize2 size={16} />
         退出全屏
@@ -538,7 +559,7 @@ export default function GamePage({ token }: GamePageProps) {
   ) : null;
 
   return (
-    <div className="page-content">
+    <div className="page-content page-wide">
       <header className="page-header">
         <div className="page-header-actions">
           <Link className="secondary button-link" to="/">返回游戏中心</Link>
@@ -549,6 +570,16 @@ export default function GamePage({ token }: GamePageProps) {
               onClick={backToLauncher}
             >
               返回重选
+            </button>
+          )}
+          {started && playUrl && !isFullscreen && (
+            <button
+              className="secondary button-link"
+              type="button"
+              onClick={reloadGame}
+            >
+              <RotateCw size={16} />
+              重新加载游戏
             </button>
           )}
           {started && playUrl && !isFullscreen && (
@@ -626,7 +657,7 @@ export default function GamePage({ token }: GamePageProps) {
           {gameFrameHead}
           <iframe
             ref={iframeRef}
-            key={playUrl}
+            key={`${playUrl}#${reloadNonce}`}
             title={installedGame.name}
             src={playUrl}
             allowFullScreen
