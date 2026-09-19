@@ -56,6 +56,9 @@ const dictionaries: Record<Language, Dict> = {
     "pages.seating.kicker": "Seating Chart",
     "pages.seating.title": "座位表",
     "pages.seating.subtitle": "设置排数和列数，安排或随机排座位",
+    "pages.redpacket.kicker": "Lucky Draw",
+    "pages.redpacket.title": "奖品红包",
+    "pages.redpacket.subtitle": "输入奖品和份数，生成一屏红包逐个点开，适合课堂抽奖发奖",
 
     // 设置页
     "settings.kicker": "Settings",
@@ -150,6 +153,10 @@ const dictionaries: Record<Language, Dict> = {
     "pages.seating.title": "Seating Chart",
     "pages.seating.subtitle":
       "Set rows and columns, then assign or shuffle the seats",
+    "pages.redpacket.kicker": "Lucky Draw",
+    "pages.redpacket.title": "Lucky Draw",
+    "pages.redpacket.subtitle":
+      "Enter prizes and quantities, then open the red packets one by one",
 
     "settings.kicker": "Settings",
     "settings.title": "Settings",

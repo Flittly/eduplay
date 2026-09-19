@@ -5,6 +5,7 @@ import ClassesPage from "./pages/ClassesPage";
 import DashboardPage from "./pages/DashboardPage";
 import GamePage from "./pages/GamePage";
 import LoginPage from "./pages/LoginPage";
+import RedPacketPage from "./pages/RedPacketPage";
 import RollCallPage from "./pages/RollCallPage";
 import RandomPickPage from "./pages/RandomPickPage";
 import SeatingPage from "./pages/SeatingPage";
@@ -140,6 +141,7 @@ export default function App() {
           path="/tools/seating"
           element={<SeatingPage token={token ?? ""} />}
         />
+        <Route path="/tools/red-packet" element={<RedPacketPage />} />
         <Route
           path="/teacher/points"
           element={<StudentPointsPage token={token ?? ""} />}

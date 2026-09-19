@@ -135,6 +135,19 @@ a:focus-visible {
   color: inherit;
 }
 
+/* 原实现只有 .primary 有禁用态，secondary 禁用后外观与可点状态完全一样，
+   用户点了没反应会以为卡住了。 */
+.secondary:disabled {
+  opacity: 0.5;
+  box-shadow: 3px 3px 0 var(--paper-dim);
+  cursor: not-allowed;
+}
+
+.secondary:disabled:hover {
+  transform: none;
+  box-shadow: 3px 3px 0 var(--paper-dim);
+}
+
 .error {
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -2479,6 +2492,406 @@ a:focus-visible {
   font-size: 13px;
   font-weight: 700;
   color: var(--ink-weak);
+}
+
+/* ===== 奖品红包（工具箱） ===== */
+/* 沿用 Riso 视觉：ink 描边 + 错位硬投影。红包本体用 pink（暖色有红包联想），
+   封口圆扣用 orange，翻开后的背面用纸色，靠底色就能区分「有奖 / 谢谢参与」。 */
+.rp-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.rp-setup-head h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.rp-setup-head p {
+  margin: 0;
+  color: var(--ink-weak);
+  line-height: 1.7;
+}
+
+.rp-prize-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rp-prize-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rp-prize-index {
+  flex: none;
+  width: 26px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-weak);
+}
+
+.rp-prize-name {
+  flex: 1 1 auto;
+  /* 不加 min-width:0 的话，flex 子项不会收缩，长输入框会把整行顶出卡片。 */
+  min-width: 0;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rp-prize-name:focus,
+.rp-prize-count input:focus,
+.rp-total-input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 3px 3px 0 var(--blue);
+}
+
+.rp-prize-count {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.rp-prize-count input {
+  width: 66px;
+  padding: 10px 6px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.rp-prize-count span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
+
+.rp-prize-remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper-dim);
+  color: var(--ink);
+  transition: transform 80ms linear, background-color 80ms linear;
+}
+
+.rp-prize-remove:hover:not(:disabled) {
+  background: var(--pink);
+  transform: translate(1px, 1px);
+}
+
+.rp-prize-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rp-add-row {
+  align-self: flex-start;
+}
+
+.rp-total-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 2px dashed rgba(26, 26, 26, 0.18);
+}
+
+.rp-total-label {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.rp-total-input {
+  width: 88px;
+  padding: 10px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.rp-total-tip {
+  flex: 1 1 240px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-weak);
+}
+
+.rp-start {
+  display: flex;
+  justify-content: center;
+  margin: 22px 0 24px;
+}
+
+/* --- 开奖台：大屏投影时后排也要看得清 --- */
+.rp-latest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 118px;
+  margin-bottom: 18px;
+  padding: 16px 22px;
+  border: 3px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 5px 5px 0 var(--pink);
+  text-align: center;
+}
+
+.rp-latest-idle {
+  border-style: dashed;
+  box-shadow: 5px 5px 0 var(--paper-dim);
+}
+
+.rp-latest-blank {
+  box-shadow: 5px 5px 0 var(--blue);
+}
+
+.rp-latest-no {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink-weak);
+  letter-spacing: 0.08em;
+}
+
+.rp-latest-prize {
+  font-size: 48px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.rp-latest-blank .rp-latest-prize {
+  color: var(--ink-weak);
+}
+
+.rp-latest-hint {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
+
+/* --- 红包网格 --- */
+/* 用 flex-wrap 而不是 grid auto-fill：auto-fill 会先按容器宽度摊满列数，
+   6 个红包在 1180px 下被摊成 10 列、每个只剩 105px 且右侧留空；
+   改成「每行能放几个放几个 + 整行居中」后，宽屏下每个红包 140px，投影时更清楚。 */
+.rp-board {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start; /* 不加这条，stretch 会盖掉 aspect-ratio 把红包拉高 */
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.rp-packet {
+  position: relative;
+  flex: 0 1 140px;
+  aspect-ratio: 5 / 7;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  perspective: 700px;
+  transition: transform 90ms linear;
+}
+
+.rp-packet-inner {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.4, 0.1, 0.2, 1);
+}
+
+.rp-packet.is-open .rp-packet-inner {
+  transform: rotateY(180deg);
+}
+
+.rp-packet-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  border-radius: 3px;
+  /* 两个面叠在一起，必须隐藏背面，否则翻到一半会「透底」。 */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rp-packet-front {
+  background: var(--pink);
+  box-shadow: 3px 3px 0 var(--orange);
+}
+
+/* 封口横线 + 圆扣，让方块看起来像个信封/红包 */
+.rp-packet-front::before {
+  content: "";
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ink);
+}
+
+.rp-packet-seal {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--orange);
+  transform: translate(-50%, -50%);
+}
+
+.rp-packet-no {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: 0.06em;
+  transform: translateX(-50%);
+}
+
+.rp-packet-back {
+  padding: 8px;
+  background: var(--paper);
+  box-shadow: 3px 3px 0 var(--blue);
+  text-align: center;
+  transform: rotateY(180deg);
+}
+
+.rp-packet-prize {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.rp-packet:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+}
+
+.rp-packet:hover:not(:disabled) .rp-packet-front {
+  box-shadow: 5px 5px 0 var(--orange);
+}
+
+.rp-packet:active:not(:disabled) {
+  transform: translate(2px, 2px);
+}
+
+.rp-packet:disabled {
+  cursor: default;
+  /* 已开的红包压暗一点，让未开的更醒目；刚开出的那个恢复全亮。 */
+  opacity: 0.8;
+}
+
+.rp-packet.is-fresh {
+  opacity: 1;
+}
+
+.rp-packet.is-fresh .rp-packet-face {
+  box-shadow: 6px 6px 0 var(--green);
+  animation: rp-pop 620ms ease-out;
+}
+
+.rp-packet.is-blank .rp-packet-back {
+  background: var(--paper-dim);
+  box-shadow: 3px 3px 0 rgba(26, 26, 26, 0.25);
+}
+
+.rp-packet.is-blank .rp-packet-prize {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
+
+/* 有奖的红包翻开后左上角贴个色块，老师一眼就能扫出哪些中了奖。
+   角标挂在背面上，而未开时背面被 backface-visibility 藏住，不会提前泄底。 */
+.rp-packet-back::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  background: var(--pink);
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+.rp-packet.is-blank .rp-packet-back::after {
+  display: none;
+}
+
+@keyframes rp-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.09);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.rp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.rp-board-tip {
+  margin: 14px 0 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-weak);
+  text-align: center;
 }
 
 /* ===== 设置页 ===== */

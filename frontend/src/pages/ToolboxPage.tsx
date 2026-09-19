@@ -1,4 +1,4 @@
-import { Dices, LayoutGrid, ListChecks } from "lucide-react";
+import { Dices, Gift, LayoutGrid, ListChecks } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "../i18n";
 
@@ -43,6 +43,16 @@ export default function ToolboxPage() {
           <h2>座位表</h2>
           <p>
             自定义排数和列数，按名单顺序或一键随机安排座位，空位自动留在后排。
+          </p>
+        </Link>
+
+        <Link className="tool-card" to="/tools/red-packet">
+          <div className="tool-card-icon">
+            <Gift size={28} />
+          </div>
+          <h2>奖品红包</h2>
+          <p>
+            输入奖品和份数，生成一屏红包。点开一个翻一个，适合课堂抽奖、发奖环节。
           </p>
         </Link>
       </div>
