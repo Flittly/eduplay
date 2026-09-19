@@ -10,8 +10,8 @@ import TagsPage from "./pages/TagsPage";
 import TeachersPage from "./pages/TeachersPage";
 import type { AdminUser } from "./types";
 
-const USER_KEY = "eduplay-admin.user";
-const TOKEN_KEY = "eduplay-admin.token";
+const USER_KEY = "eduplay-admin-frontend.user";
+const TOKEN_KEY = "eduplay-admin-frontend.token";
 
 export default function App() {
   const [user, setUser] = useState<AdminUser | null>(() => {

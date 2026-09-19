@@ -1,6 +1,6 @@
-# EduPlay Server
+# EduPlay Admin Backend
 
-EduPlay 云端后端，独立部署在服务器上，只连接 MySQL。
+EduPlay 管理端后端（云端），部署在服务器上，只连接 MySQL。
 
 职责：
 
@@ -11,6 +11,10 @@ EduPlay 云端后端，独立部署在服务器上，只连接 MySQL。
 - 云端游戏商城：游戏列表、激活码兑换、插件包下载
 
 不保存学生名单与学生积分。
+
+> **关于名字**：模块名 `admin-backend` 是从"管理端"这个部署域取的，但它并非只服务管理后台——
+> 老师端 App 调用的云端商城、激活码兑换与插件包下载接口（`/store/*`）也在这里。
+> 之所以不叫 `cloud-backend`，是为了与 `frontend` / `backend` 这对命名保持同一维度。
 
 ## 数据库
 
@@ -36,4 +40,4 @@ mvn spring-boot:run
 密码：admin123
 ```
 
-管理后台前端 `eduplay-admin` 的 Vite 代理已经指向 `http://localhost:17070`，直接运行即可对接。
+管理后台前端 `eduplay-admin-frontend` 的 Vite 代理已经指向 `http://localhost:17070`，直接运行即可对接。

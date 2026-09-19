@@ -1,6 +1,6 @@
-# EduPlay Admin
+# EduPlay Admin Frontend
 
-EduPlay 管理后台前端，对接独立的云端后端工程 [eduplay-server](E:/Self/workspace/eduplay-server)。
+EduPlay 管理后台前端，对接管理端后端 [admin-backend](../admin-backend)。
 
 ## 运行
 
@@ -15,10 +15,10 @@ npm run dev
 http://localhost:5174
 ```
 
-Vite 会把 `/api` 代理到 eduplay-server 后端：
+Vite 会把 `/api` 代理到 admin-backend 后端：
 
 ```text
-http://localhost:18080
+http://localhost:17070
 ```
 
 ## 默认管理员

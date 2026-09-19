@@ -4,9 +4,9 @@
 
 - `frontend/`：老师端 React 前端
 - `backend/`：老师端本地 Java 后端（H2）
+- `admin-frontend/`：管理后台 React 前端
+- `admin-backend/`：管理端云端 Java 后端（MySQL）
 - `desktop/`：Electron 桌面壳与打包脚本
-- `server/`：云端 Java 后端（MySQL）
-- `admin/`：管理后台前端
 - `docs/`：设计文档
 
 ## 本地快速构建桌面版

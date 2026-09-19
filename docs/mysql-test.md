@@ -32,10 +32,10 @@ create database eduplay_cloud
 
 ## 3. 启动云端后端
 
-云端后端是独立工程 `eduplay-server`：
+云端后端位于 `admin-backend` 模块：
 
 ```powershell
-cd E:\Self\workspace\eduplay-server
+cd E:\Self\workspace\eduplay\admin-backend
 
 $env:MYSQL_USER='root'
 $env:MYSQL_PASSWORD='123456'

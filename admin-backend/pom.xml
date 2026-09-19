@@ -12,9 +12,9 @@
     </parent>
 
     <groupId>com.eduplay</groupId>
-    <artifactId>eduplay-server</artifactId>
+    <artifactId>eduplay-admin-backend</artifactId>
     <version>1.4.0</version>
-    <name>eduplay-server</name>
+    <name>eduplay-admin-backend</name>
     <description>EduPlay cloud server backend</description>
 
     <properties>
