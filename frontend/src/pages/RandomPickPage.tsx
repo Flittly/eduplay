@@ -1,120 +1,29 @@
-import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { listStudentClasses, listStudents } from "../api";
+import { useRandomPick } from "../hooks/useRandomPick";
 import { useTranslation } from "../i18n";
-import type { Student } from "../types";
 
 interface RandomPickPageProps {
   token: string;
 }
 
-const ROLL_TICKS = 24;
-const ROLL_INTERVAL_MS = 80;
-
 export default function RandomPickPage({ token }: RandomPickPageProps) {
   const { t } = useTranslation();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [classList, setClassList] = useState<string[]>([]);
-  const [selectedClass, setSelectedClass] = useState("ALL");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [noRepeat, setNoRepeat] = useState(false);
-  const [pickedIds, setPickedIds] = useState<Set<number>>(new Set());
-  const [sessionCount, setSessionCount] = useState(0);
-  const [rolling, setRolling] = useState(false);
-  const [current, setCurrent] = useState<Student | null>(null);
-  const timerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const result =
-          selectedClass === "ALL"
-            ? await listStudents(token)
-            : await listStudents(token, { className: selectedClass });
-        if (!cancelled) {
-          setStudents(result);
-          setPickedIds(new Set());
-          setSessionCount(0);
-          setCurrent(null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载学生名单失败");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    async function loadClasses() {
-      try {
-        const classes = await listStudentClasses(token);
-        if (!cancelled) {
-          setClassList(classes);
-        }
-      } catch {
-        if (!cancelled) {
-          setClassList([]);
-        }
-      }
-    }
-
-    void loadClasses();
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token, selectedClass]);
-
-  // 切换班级时停止滚动
-  useEffect(() => {
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [selectedClass]);
-
-  const pool = noRepeat
-    ? students.filter((student) => !pickedIds.has(student.id))
-    : students;
-
-  function pick() {
-    if (rolling || pool.length === 0) {
-      return;
-    }
-    setRolling(true);
-    let ticks = 0;
-    timerRef.current = window.setInterval(() => {
-      const candidate = pool[Math.floor(Math.random() * pool.length)];
-      setCurrent(candidate);
-      ticks += 1;
-      if (ticks >= ROLL_TICKS && timerRef.current !== null) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-        setRolling(false);
-        setSessionCount((count) => count + 1);
-        if (noRepeat) {
-          const chosen = candidate;
-          setPickedIds((previous) => new Set(previous).add(chosen.id));
-        }
-      }
-    }, ROLL_INTERVAL_MS);
-  }
-
-  function resetPicked() {
-    setPickedIds(new Set());
-    setSessionCount(0);
-  }
+  const {
+    students,
+    classList,
+    selectedClass,
+    selectClass,
+    loading,
+    error,
+    noRepeat,
+    setNoRepeat,
+    sessionCount,
+    rolling,
+    current,
+    pool,
+    pick,
+    resetPicked
+  } = useRandomPick(token);
 
   return (
     <div className="page-content">
@@ -136,7 +45,7 @@ export default function RandomPickPage({ token }: RandomPickPageProps) {
         <div className="class-tabs">
           <button
             className={selectedClass === "ALL" ? "active" : ""}
-            onClick={() => setSelectedClass("ALL")}
+            onClick={() => selectClass("ALL")}
           >
             全部班级
           </button>
@@ -144,7 +53,7 @@ export default function RandomPickPage({ token }: RandomPickPageProps) {
             <button
               key={className}
               className={selectedClass === className ? "active" : ""}
-              onClick={() => setSelectedClass(className)}
+              onClick={() => selectClass(className)}
             >
               {className}
             </button>

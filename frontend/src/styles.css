@@ -2494,6 +2494,328 @@ a:focus-visible {
   color: var(--ink-weak);
 }
 
+/* ===== 随机点名浮窗（全局） =====
+   挂在 AppLayout 上的常驻小工具，任何页面都能调出来点名，
+   所以它不受 .page-content 的宽度约束，自己固定在视口右下角。
+
+   z-index 300 是刻意高过 .game-frame.is-fullscreen(200) 的：游戏全屏时
+   浮窗必须浮在大屏覆盖层之上才看得见，否则「一边玩一边点名」这个主场景废掉。
+   代价是它同时高过 .modal-mask(20)，所以有弹窗打开时由 FloatingPick
+   主动不渲染，而不是靠层级去压。 */
+.fp-dock {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pink);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 3px 3px 0 var(--blue);
+  transition: transform 80ms linear, box-shadow 80ms linear;
+}
+
+.fp-toggle:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--blue);
+}
+
+.fp-toggle:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--blue);
+}
+
+.fp-window {
+  width: 320px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 6px 6px 0 var(--blue);
+  overflow: hidden;
+}
+
+.fp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--paper-dim);
+  border-bottom: 2px solid var(--ink);
+}
+
+.fp-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.fp-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.fp-close:hover {
+  background: var(--pink);
+}
+
+.fp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.fp-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.fp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
+
+.fp-field select {
+  padding: 6px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fp-norepeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.fp-norepeat input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--pink);
+}
+
+/* 舞台：与整页版同构（kicker / 名字 / 学号），只是按浮窗宽度整体收小 */
+.fp-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 134px;
+  padding: 12px 10px;
+  text-align: center;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper-dim);
+  box-shadow: 3px 3px 0 var(--orange);
+}
+
+.fp-stage.is-settled {
+  box-shadow: 3px 3px 0 var(--green);
+}
+
+.fp-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-weak);
+}
+
+.fp-name {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.14;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.fp-stage.is-rolling .fp-name {
+  color: var(--blue);
+}
+
+.fp-stage.is-settled .fp-name {
+  text-decoration: underline;
+  text-decoration-color: var(--pink);
+  text-decoration-thickness: 6px;
+  text-underline-offset: 8px;
+}
+
+.fp-name-idle {
+  color: var(--ink-weak);
+}
+
+.fp-no {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--blue);
+}
+
+.fp-no-idle {
+  color: var(--ink-weak);
+}
+
+.fp-go {
+  width: 100%;
+  padding: 12px 16px;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  background: var(--pink);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  box-shadow: 4px 4px 0 var(--blue);
+  transition: transform 80ms linear, box-shadow 80ms linear;
+}
+
+.fp-go:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--blue);
+}
+
+.fp-go:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--blue);
+}
+
+.fp-go:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.fp-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
+
+.fp-reset {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fp-reset:hover:not(:disabled) {
+  background: var(--paper-dim);
+}
+
+.fp-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.fp-hint {
+  margin: 0;
+  padding: 22px 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-weak);
+}
+
+.fp-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  text-align: center;
+}
+
+.fp-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-weak);
+}
+
+.fp-error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 全屏游戏时是投影场景：整体放大，后排也要看得清被点到的名字 */
+.fp-dock.is-fullscreen .fp-window {
+  width: 400px;
+}
+
+.fp-dock.is-fullscreen .fp-stage {
+  min-height: 184px;
+}
+
+.fp-dock.is-fullscreen .fp-name {
+  font-size: 58px;
+}
+
+.fp-dock.is-fullscreen .fp-go {
+  padding: 16px;
+  font-size: 22px;
+}
+
+.fp-dock.is-fullscreen .fp-toggle {
+  padding: 13px 22px;
+  font-size: 17px;
+}
+
 /* ===== 奖品红包（工具箱） ===== */
 /* 沿用 Riso 视觉：ink 描边 + 错位硬投影。红包本体用 pink（暖色有红包联想），
    封口圆扣用 orange，翻开后的背面用纸色，靠底色就能区分「有奖 / 谢谢参与」。 */

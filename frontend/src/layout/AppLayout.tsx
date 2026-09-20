@@ -11,6 +11,7 @@ import {
   Wrench
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import FloatingPick from "../components/FloatingPick";
 import InfoDialog from "../components/InfoDialog";
 import ProfileDialog from "../components/ProfileDialog";
 import { useTranslation } from "../i18n";
@@ -148,6 +149,10 @@ export default function AppLayout({
           }}
         />
       )}
+
+      {/* 课中随手点名用的小窗：挂在这里所以每个页面都能用，
+          游戏全屏时也会跟着 portal 进全屏层（见 FloatingPick）。 */}
+      {user.role === "TEACHER" && <FloatingPick token={token} />}
     </>
   );
 }
