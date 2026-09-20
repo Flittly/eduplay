@@ -77,6 +77,184 @@ function findFreePort() {
   });
 }
 
+/**
+ * 端口稳定性 —— 「记住密码没效果」的真正原因就在这。
+ *
+ * 页面是从 http://127.0.0.1:<端口>/ 加载的，而 **localStorage / IndexedDB 是按
+ * origin 隔离的，origin 里包含端口**。原来这里每次启动都 listen(0) 让系统随机
+ * 分配端口，等于每次都是全新 origin、全新空存储：勾了「记住密码」下次还是空
+ * 密码框，主题、语言、登录令牌、红包奖品同样每次都回到默认值。
+ *
+ * 实测（连续三次启动真实主进程，同一个 userData）：日志里出现了
+ *   http://127.0.0.1:51409 / :53358 / :59493  三个互不相通的存储，
+ * 三个 origin 下各写了一份 __origin_probe__，但页面上每次都读到 null
+ * —— 数据没丢，只是被端口隔开了。
+ *
+ * 所以改成「记住用过的端口」：候选端口写在 userData/port.txt 里，启动时从
+ * 最早记录的开始逐个试探，能绑上就用它 —— origin 不变，本地数据就还在。
+ * 只有全都绑不上（端口被别的程序占了）才分配新的、追加到列表末尾。
+ *
+ * 为什么是「最早优先」而不是「最近优先」：U 盘便携版会在 A/B 两台电脑之间
+ * 来回插。若按最近优先，A 电脑用过 51409、B 电脑换到 60123 之后，A 电脑下次
+ * 会先试 60123 并成功 —— origin 就漂了。按最早优先，两台电脑各自都会停在
+ * 自己那台机器上一直可用的那个端口，origin 保持稳定。
+ */
+const PORT_RECORD_FILE = "port.txt";
+const PORT_CANDIDATE_LIMIT = 16;
+
+function portRecordPath() {
+  return path.join(app.getPath("userData"), PORT_RECORD_FILE);
+}
+
+function readPortCandidates() {
+  try {
+    return fs
+      .readFileSync(portRecordPath(), "utf8")
+      .split(/[^0-9]+/)
+      .map((token) => Number.parseInt(token, 10))
+      .filter((port) => Number.isInteger(port) && port > 1024 && port < 65536)
+      .slice(0, PORT_CANDIDATE_LIMIT);
+  } catch {
+    // 首次启动、记录被删或损坏：走下面的重新分配
+    return [];
+  }
+}
+
+/** 端口空闲则返回它，被占用返回 null。 */
+function probePort(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => resolve(null));
+    server.listen(port, "127.0.0.1", () => {
+      const address = server.address();
+      const actual = typeof address === "object" && address ? address.port : port;
+      server.close(() => resolve(actual));
+    });
+  });
+}
+
+function rememberPort(port, previous) {
+  // 新端口排在**末尾**：列表按「最早用过」排序，启动时从最早的开始试，
+  // 这样每台电脑都稳定停在自己一直可用的那个端口上，origin 不会漂。
+  // 若改成最近优先，A 电脑用过 51409、B 电脑换到 60123 之后，A 电脑下次
+  // 会先试 60123 且成功 —— origin 就漂到 B 的存储上去了。
+  const next = [...previous.filter((item) => item !== port), port].slice(
+    0,
+    PORT_CANDIDATE_LIMIT
+  );
+  try {
+    fs.writeFileSync(portRecordPath(), next.map(String).join("\n"), "utf8");
+  } catch {
+    // 写不进去也不影响本次启动
+  }
+}
+
+/**
+ * 从 Chromium 的 Local Storage 里把「历史上用过的 origin」捞回来。
+ *
+ * 装在 U 盘上的老版本没有 port.txt，但 leveldb 文件里留着写入时的 origin
+ * 前缀（http://127.0.0.1:<端口>）。升级到本版本后第一次启动时复用其中最近
+ * 用过的那个端口，此前的登录态 / 记住的密码 / 主题就能原地接上，而不是
+ * 「更新一次、设置重置一次」。
+ *
+ * 排序依据：文件按修改时间升序拼接后取每个端口**最后出现的位置**，
+ * 越靠后说明越近被写过。
+ */
+function discoverPortsFromStorage() {
+  const dir = path.join(app.getPath("userData"), "Local Storage", "leveldb");
+  let files;
+  try {
+    files = fs
+      .readdirSync(dir)
+      .filter((name) => /\.(log|ldb)$/i.test(name))
+      .map((name) => {
+        const full = path.join(dir, name);
+        let mtime = 0;
+        try {
+          mtime = fs.statSync(full).mtimeMs;
+        } catch {
+          // 读不到时间就当最旧
+        }
+        return { full, mtime };
+      })
+      .sort((a, b) => a.mtime - b.mtime);
+  } catch {
+    return [];
+  }
+
+  const lastSeenAt = new Map();
+  let offsetBase = 0;
+  for (const file of files) {
+    let text;
+    try {
+      text = fs.readFileSync(file.full).toString("latin1");
+    } catch {
+      continue;
+    }
+    const pattern = /http:\/\/127\.0\.0\.1:(\d+)/g;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const port = Number.parseInt(match[1], 10);
+      if (Number.isInteger(port) && port > 1024 && port < 65536) {
+        lastSeenAt.set(port, offsetBase + match.index);
+      }
+    }
+    offsetBase += text.length + 1_000_000;
+  }
+
+  return [...lastSeenAt.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([port]) => port)
+    .slice(0, PORT_CANDIDATE_LIMIT);
+}
+
+/**
+ * 记录一次「端口漂移」。
+ * 它意味着这台机器上此前的本地设置（登录态 / 记住的密码 / 主题）读不回来了，
+ * 用户看到的是「设置莫名其妙被重置」。留个痕，方便事后定位而不是靠猜。
+ */
+function notePortDrift(previousPorts, port) {
+  try {
+    const dataDir = resolveDataDir();
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.appendFileSync(
+      path.join(dataDir, "port-history.log"),
+      `${new Date().toISOString()}  端口回退：${previousPorts.join(", ")} 均被占用 -> 改用 ${port}\n`,
+      "utf8"
+    );
+  } catch {
+    // 尽力而为
+  }
+}
+
+async function resolveStablePort() {
+  const recorded = readPortCandidates();
+  // 没有记录（例如刚从老版本升级上来）就去存储文件里找回历史端口
+  const candidates = recorded.length > 0 ? recorded : discoverPortsFromStorage();
+
+  for (const candidate of candidates) {
+    const available = await probePort(candidate);
+    if (available) {
+      if (recorded.length === 0) {
+        // 找回成功：立刻固化，之后只认它，不必每次都扫描存储
+        rememberPort(available, []);
+      }
+      return { port: available, drifted: false };
+    }
+  }
+
+  const fresh = await findFreePort();
+  rememberPort(fresh, candidates);
+  if (candidates.length > 0) {
+    notePortDrift(candidates, fresh);
+    console.warn(
+      `记录中的端口均被占用（${candidates.join(", ")}），本次改用 ${fresh}`
+    );
+  }
+  return { port: fresh, drifted: candidates.length > 0 };
+}
+
 async function waitForBackend(url, timeoutMs = 120000, logPath = "") {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -427,7 +605,7 @@ function registerRecoveryHandlers(win) {
 async function createWindow() {
   Menu.setApplicationMenu(null);
 
-  const port = await findFreePort();
+  const { port } = await resolveStablePort();
   currentPort = port;
   await startBackend(port);
 
