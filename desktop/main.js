@@ -5,23 +5,134 @@ const net = require("net");
 const path = require("path");
 
 // ── 便携模式（U 盘运行）───────────────────────────────────────────────
-// 若 exe 同目录存在 portable.txt，就把 Electron 的用户数据目录整体搬到
-// exe 旁边。userData 是「本地数据库 + Chromium 缓存 + localStorage（登录
-// 令牌）」的根目录，改这里等于把学生数据和登录状态一并放进 U 盘。
+// 若 exe 同目录存在 portable.txt，就把 Electron 的用户数据目录整个搬出程序目录。
+//
+// 数据放在**程序目录的兄弟位置**，而不是程序目录里面：
+//   F:\EduPlay-便携版\              ← 程序：更新时整个替换掉
+//   F:\EduPlay-用户数据（请勿删除）\  ← 数据：班级/学生/积分/登录态，永不被更新碰到
+// 于是"更新版本"退化成"替换一个文件夹"，用户不可能手滑把数据连根删掉。
+//
+// 为什么不把数据放进程序目录（那是更直觉的"便携版"做法）：
+// 更新时必须叮嘱"换成新的，但别动里面那个文件夹"——这是一条**带例外**的指令，
+// 而"删掉旧文件夹再拷新的"恰恰是老师更新时的第一反应，那个动作会连数据一起删。
+// 并列布局的更新指令是"整个换掉程序文件夹"，没有例外可记错。
+//
+// 目录名带中文和"请勿删除"：老师只会在资源管理器里看到这两个文件夹，
+// 归属和"别删"必须写在名字上，不能指望他点开里面的说明文件。
+// 实测非 ASCII 路径对 Electron 与 Java（cwd + H2 相对路径）均无影响。
+//
+// userData 是「本地数据库 + Chromium 缓存 + localStorage（登录令牌）」的根目录，
+// 改这里等于把学生数据和登录状态一并放进 U 盘。
 //
 // 必须在模块顶层同步执行：app ready 之后 Chromium 的存储路径就已固定，
 // 那时再 setPath 不会生效。
 const exeDir = path.dirname(process.execPath);
-const portableRoot = path.join(exeDir, "userdata");
+const parentDir = path.dirname(exeDir);
+
+const DATA_DIR_NAME = readPortableDataDirName();
+const DATA_DIR_MARKER = "请勿删除.txt";
+
+/** 数据目录名的唯一真源是 package.json 的 portableDataDirName（打包脚本也读它）。 */
+function readPortableDataDirName() {
+  try {
+    const name = require("./package.json").portableDataDirName;
+    if (typeof name === "string" && name.trim()) {
+      return name.trim();
+    }
+  } catch {
+    // 读不到就退回字面量，绝不让程序因为一个目录名起不来
+  }
+  return "EduPlay-用户数据（请勿删除）";
+}
+// 历史布局，按「新 → 老」顺序探测，命中就把整个目录改名成 DATA_DIR_NAME：
+//   [parentDir, "EduPlayData"] —— 曾短暂用过一版，与程序目录并列
+//   [exeDir,    "userdata"]    —— 最早的布局，藏在程序目录里面
+const LEGACY_DATA_DIRS = [
+  [parentDir, "EduPlayData"],
+  [exeDir, "userdata"]
+];
+// 兄弟位置建不出来（父目录只读）时的兜底位置。
+const FALLBACK_DATA_DIR_NAME = "userdata";
+
+/** 数据目录放在跨过程序目录的位置；老布局顺手搬过去。 */
+function resolvePortableDataRoot() {
+  const separated = path.join(parentDir, DATA_DIR_NAME);
+  if (fs.existsSync(separated)) {
+    return separated; // 已经是当前布局
+  }
+  for (const [base, name] of LEGACY_DATA_DIRS) {
+    const legacy = path.join(base, name);
+    if (!fs.existsSync(legacy)) {
+      continue;
+    }
+    try {
+      // 老布局就地升级。同盘 rename 是原子操作、不遍历子文件，
+      // 内部文件被句柄占着也能成功（fs.cpSync 会失败）。
+      // 名字变了不影响页面 origin（origin 只看 127.0.0.1:<端口>），
+      // 所以登录态、记住的密码、主题、语言都原地接着用。
+      fs.renameSync(legacy, separated);
+      return separated;
+    } catch {
+      return legacy; // 移不动（被占 / 只读）就原地不动，程序照常跑
+    }
+  }
+  return separated; // 全新安装
+}
+
+/** 在数据目录里留个说明。文件名刻意用中文：它会夹在一堆英文缓存目录中间，很显眼。 */
+function writeDataDirMarker(root) {
+  try {
+    fs.writeFileSync(
+      path.join(root, DATA_DIR_MARKER),
+      [
+        "EduPlay 的数据都在这个文件夹里，请不要删除。",
+        "",
+        "里面有：",
+        "  - 班级、学生名单和积分",
+        "  - 已安装的教学游戏",
+        "  - 登录状态和界面设置（主题、语言）",
+        "",
+        "删除这个文件夹，以上内容会全部清空，无法找回。",
+        "",
+        "更新程序时：只替换旁边的「EduPlay-便携版」文件夹，",
+        "这个文件夹一动都不要动 —— 换新版本后数据会自动沿用，",
+        "不需要导出再导入。",
+        ""
+      ].join("\r\n"),
+      "utf8"
+    );
+  } catch {
+    // 写不进去不影响使用
+  }
+  // 老版本写下的点开头说明文件就地清掉，免得数据目录里躺着两份说明
+  // （而且那份是隐藏风格，老师根本不会点开）。
+  try {
+    fs.rmSync(path.join(root, ".eduplay-data"), { force: true });
+  } catch {
+    // 删不掉也无所谓
+  }
+}
 
 if (fs.existsSync(path.join(exeDir, "portable.txt"))) {
+  let portableRoot = null;
   try {
+    portableRoot = resolvePortableDataRoot();
     fs.mkdirSync(portableRoot, { recursive: true });
+  } catch {
+    portableRoot = null; // 兄弟位置建不了（父目录只读），下面退回程序目录内
+  }
+  if (!portableRoot) {
+    try {
+      portableRoot = path.join(exeDir, FALLBACK_DATA_DIR_NAME);
+      fs.mkdirSync(portableRoot, { recursive: true });
+    } catch (err) {
+      console.error("便携数据目录不可用，已回退到默认目录：", err.message);
+    }
+  }
+  if (portableRoot) {
     app.setPath("userData", portableRoot);
     app.setPath("sessionData", portableRoot);
-  } catch (err) {
-    // U 盘写保护 / 空间不足：退回默认目录，保证程序仍能启动
-    console.error("便携数据目录不可用，已回退到默认目录：", err.message);
+    writeDataDirMarker(portableRoot);
   }
 }
 
