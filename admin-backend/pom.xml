@@ -13,7 +13,7 @@
 
     <groupId>com.eduplay</groupId>
     <artifactId>eduplay-admin-backend</artifactId>
-    <version>1.4.0</version>
+    <version>1.5.0</version>
     <name>eduplay-admin-backend</name>
     <description>EduPlay cloud server backend</description>
 

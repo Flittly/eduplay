@@ -6,6 +6,14 @@ dist/
 data/
 *.log
 
+# 打包时生成的临时配置与中间输出目录（release.ps1 / build-desktop.js 每次构建都会重建）。
+# 换新输出目录是为了绕开杀软句柄锁，这些目录只是构建脚手架，不该进版本库。
+builder-*.json
+release-nsis/
+release-nsis-*/
+release-portable-*/
+release-fresh/
+
 # 构建生成物（运行时由 make-runtime.ps1 生成）
 runtime/
 runtime.tmp/

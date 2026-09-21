@@ -37,6 +37,13 @@ if (!targetName) {
   console.error('[portable] package.json 缺少顶层字段 "portableDirName"，无法确定输出目录名');
   process.exit(1);
 }
+// 数据目录名的唯一真源，与 main.js 读的是同一个字段。
+// 写死在这里的后果我们踩过一次：改名后日志还印着旧名字，误导人。
+const dataDirName = pkg.portableDataDirName;
+if (!dataDirName) {
+  console.error('[portable] package.json 缺少顶层字段 "portableDataDirName"');
+  process.exit(1);
+}
 
 // --from <目录>：构建输出根目录。默认与交付目录相同。
 let buildRootName = "release-portable";
@@ -117,9 +124,50 @@ if (!useCopy) {
 const markerSource = path.join(desktopDir, "build", "portable-marker.txt");
 if (fs.existsSync(markerSource)) {
   fs.copyFileSync(markerSource, path.join(finalDir, "portable.txt"));
-  console.log("[portable] 已写入 portable.txt（数据将保存在该目录的 userdata 下）");
+  console.log(`[portable] 已写入 portable.txt（数据将保存在本目录同级的 ${dataDirName} 下）`);
 } else {
   console.warn(`[portable] 警告：标记文件模板不存在，未写入 portable.txt -> ${markerSource}`);
+}
+
+// U 盘根目录的使用说明。
+//
+// 单独放一份而不是只靠数据目录里的说明：老师是先看到 U 盘上并排的两个文件夹、
+// 心里犯嘀咕，才会有后面的事。说明要在他动手之前就摆在旁边。
+// 内容用纯文本、用词口语化，避免任何 Markdown 记号（这是给人双击打开的 .txt）。
+const readmePath = path.join(deliveryRoot, "使用说明.txt");
+try {
+  fs.writeFileSync(
+    readmePath,
+    [
+      "EduPlay 使用说明",
+      "",
+      "这个 U 盘上有两个文件夹，各自的分工是：",
+      "",
+      `  ${targetName}`,
+      "      —— 程序本体。双击里面的 EduPlay.exe 启动。",
+      "",
+      `  ${dataDirName}`,
+      "      —— 您的数据。班级名单、学生成绩、积分、已安装的游戏、",
+      "         登录状态和界面设置，全部存在这里。",
+      "",
+      "重要：第二个文件夹请不要删除。“请勿删除”不是客套话 ——",
+      "删掉它，班级和学生数据就全部没有了，无法找回。",
+      "",
+      "以后要升级到新版本时：",
+      "",
+      "  1. 先在程序里正常退出（不要直接拔 U 盘）；",
+      `  2. 把「${targetName}」这个文件夹整个换成新版本的同名文件夹；`,
+      `  3. 「${dataDirName}」一动都不要动。`,
+      "",
+      "换上新版本后数据会自动沿用，数据库结构也会自动升级，",
+      "不需要导出再导入，班级和学生一个都不会少。",
+      ""
+    ].join("\r\n"),
+    "utf8"
+  );
+  console.log("[portable] 已写入 使用说明.txt（放在交付根目录，与程序文件夹并列）");
+} catch (err) {
+  console.warn(`[portable] 使用说明.txt 写入失败（${err.code}），交付前需补上：${readmePath}`);
 }
 
 // 自检：缺任何一项都说明这次打包不完整，早报比用户双击后报错好。
@@ -134,6 +182,19 @@ for (const rel of required) {
   const ok = fs.existsSync(path.join(finalDir, rel));
   if (!ok) missing++;
   console.log(`[portable] ${ok ? "OK  " : "缺失"} ${rel}`);
+}
+
+// 交付目录里绝不该出现数据目录 —— 那说明它是从别处误拷来的，
+// 或者上一轮跑过程序。早报比让老师拿到一份带数据的"新版本"好。
+for (const stray of [dataDirName, "EduPlayData", "userdata"]) {
+  if (fs.existsSync(path.join(finalDir, stray))) {
+    missing++;
+    console.error(`[portable] 交付目录里混入了数据目录：${stray}（必须删掉再交付）`);
+  } else if (fs.existsSync(path.join(deliveryRoot, stray))) {
+    // 交付根目录就是"U 盘根目录"的等价物，说明文件也放在这里。
+    // 这里的残留不会被拷进程序文件夹，但交付时容易被整份复制走。
+    console.warn(`[portable] 提醒：${deliveryRoot} 下有残留的 ${stray}，交付前请删掉`);
+  }
 }
 
 // 来源和交付目录不同时（--from），顺手清掉构建用的临时根目录。
@@ -151,4 +212,6 @@ if (missing > 0) {
   console.error(`[portable] 有 ${missing} 个关键文件缺失，这次产物不完整`);
   process.exit(1);
 }
-console.log(`交付：把整个 "${targetName}" 文件夹拷到 U 盘即可（无需拷贝外层目录）。`);
+console.log(`交付：把 "${targetName}" 文件夹和 "使用说明.txt" 一起拷到 U 盘根目录。`);
+console.log(`      首次运行后，数据会创建在它旁边，即同级的 "${dataDirName}" 文件夹。`);
+console.log(`      以后更新只需替换 "${targetName}"，数据文件夹保持不动。`);

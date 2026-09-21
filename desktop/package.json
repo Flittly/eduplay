@@ -1,9 +1,10 @@
 {
   "name": "eduplay-desktop",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "EduPlay 老师端桌面壳：启动本地 Java 后端并打开原生窗口",
   "main": "main.js",
   "portableDirName": "EduPlay-便携版",
+  "portableDataDirName": "EduPlay-用户数据（请勿删除）",
   "author": "EduPlay",
   "license": "UNLICENSED",
   "private": true,
