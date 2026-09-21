@@ -265,7 +265,7 @@ public class AdminGameService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportTaggedPackage(String authorization, String gameCode)
+    public ExportedPackage exportTaggedPackage(String authorization, String gameCode)
             throws IOException {
         authService.requireAdmin(authorization);
         GameProduct product = gameProductRepository.findByGameCode(gameCode)
@@ -277,7 +277,25 @@ public class AdminGameService {
         byte[] original = Files.readAllBytes(
                 pluginPackageService.resolvePackage(latest)
         );
-        return rewriteManifestWithTags(original, product.getId());
+        byte[] bytes = rewriteManifestWithTags(original, product.getId());
+        return new ExportedPackage(bytes, exportedFileName(gameCode, latest));
+    }
+
+    /**
+     * 导出包文件名，与入库包名（{@code gameCode-version.zip}）同源，末尾加 {@code -tagged}
+     * 表示 manifest 里已写入标签。
+     *
+     * <p>由服务端命名而不是前端拼：导出的字节来自 {@code findFirstByGameIdOrderByVersionDesc}
+     * 选出的那个包，前端手上的 {@code game.version}（= 最近一次上传的 manifest 版本）在版本号
+     * 字符串排序与上传顺序不一致时并不等于它，前端拼会拼出与内容不符的版本号。
+     */
+    private String exportedFileName(String gameCode, GamePackage gamePackage) {
+        String base = sanitize(gameCode);
+        String version = gamePackage.getVersion();
+        if (version == null || version.isBlank()) {
+            return base + "-tagged.zip";
+        }
+        return base + "-" + sanitizeVersion(version) + "-tagged.zip";
     }
 
     private byte[] rewriteManifestWithTags(byte[] original, Long gameId)
@@ -367,6 +385,13 @@ public class AdminGameService {
             String cover,
             JsonNode tags
     ) {
+    }
+
+    /**
+     * 导出结果：字节 + 服务端定下的下载文件名（含版本号），控制器只负责塞进
+     * {@code Content-Disposition}。
+     */
+    public record ExportedPackage(byte[] bytes, String fileName) {
     }
 
     public record CreateGameRequest(

@@ -1,3 +1,4 @@
+import { invalidateRosterAfter } from "./rosterStore";
 import type {
   ApiResponse,
   AuthResult,
@@ -111,6 +112,11 @@ export function logout(token: string): Promise<void> {
   });
 }
 
+/**
+ * 改名单的写操作统一用 `invalidateRosterAfter` 包一层：
+ * 成功后通知「名单已变」，让正在听着的地方（浮窗随机点名的班级下拉）重新取数。
+ * 见 `rosterStore.ts`。
+ */
 export function importStudents(
   file: File,
   token: string
@@ -118,13 +124,15 @@ export function importStudents(
   const formData = new FormData();
   formData.append("file", file);
 
-  return request<StudentImportResult>("/students/import", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    body: formData
-  });
+  return invalidateRosterAfter(
+    request<StudentImportResult>("/students/import", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    })
+  );
 }
 
 export function listStudents(
@@ -204,13 +212,15 @@ export function addStudent(
     initialPoints?: number;
   }
 ): Promise<Student> {
-  return request<Student>("/students", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
+  return invalidateRosterAfter(
+    request<Student>("/students", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    })
+  );
 }
 
 export function updateStudent(
@@ -223,22 +233,26 @@ export function updateStudent(
     totalPoints?: number;
   }
 ): Promise<Student> {
-  return request<Student>(`/students/${studentId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
+  return invalidateRosterAfter(
+    request<Student>(`/students/${studentId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    })
+  );
 }
 
 export function deleteStudent(token: string, studentId: number): Promise<void> {
-  return request<void>(`/students/${studentId}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
+  return invalidateRosterAfter(
+    request<void>(`/students/${studentId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+  );
 }
 
 export function adjustStudentPoints(
@@ -416,14 +430,13 @@ export function setClassMonitor(
 }
 
 export function deleteClass(token: string, className: string): Promise<void> {
-  return request<void>(
-    `/classes?className=${encodeURIComponent(className)}`,
-    {
+  return invalidateRosterAfter(
+    request<void>(`/classes?className=${encodeURIComponent(className)}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`
       }
-    }
+    })
   );
 }
 

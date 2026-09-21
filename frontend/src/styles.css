@@ -2527,6 +2527,11 @@ a:focus-visible {
   letter-spacing: 0.04em;
   box-shadow: 3px 3px 0 var(--blue);
   transition: transform 80ms linear, box-shadow 80ms linear;
+  /* 拖动把手（见 FloatingPick）：触屏必须 touch-action:none，否则浏览器会把
+     "按住往旁边拖"当成滚动手势，中途发 pointercancel 把拖动掐断。 */
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .fp-toggle:hover {
@@ -2555,6 +2560,10 @@ a:focus-visible {
   padding: 9px 12px;
   background: var(--paper-dim);
   border-bottom: 2px solid var(--ink);
+  /* 标题栏是主要的拖动把手（面板展开时用户最先按的就是这里） */
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .fp-title {
@@ -2582,6 +2591,24 @@ a:focus-visible {
 
 .fp-close:hover {
   background: var(--pink);
+}
+
+/* 抓手的视觉提示。三横点比"此处可拖动"这行字省地方，也不会跟标题抢注意力。 */
+.fp-grip {
+  flex: 0 0 auto;
+  opacity: 0.4;
+}
+
+/* 拖动中：把手换成"抓着"的手型，并压掉 .fp-toggle 的 :hover / :active 位移 ——
+   那两个是"点一下"的反馈，拖动时跟着位移会让人以为没拖准。 */
+.fp-dock.is-dragging .fp-head,
+.fp-dock.is-dragging .fp-toggle {
+  cursor: grabbing;
+}
+
+.fp-dock.is-dragging .fp-toggle {
+  transform: none;
+  box-shadow: 3px 3px 0 var(--blue);
 }
 
 .fp-body {

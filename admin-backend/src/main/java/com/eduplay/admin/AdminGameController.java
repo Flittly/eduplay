@@ -81,16 +81,17 @@ public class AdminGameController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode
     ) throws Exception {
-        byte[] bytes = gameService.exportTaggedPackage(authorization, gameCode);
+        AdminGameService.ExportedPackage exported =
+                gameService.exportTaggedPackage(authorization, gameCode);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
         headers.setContentDisposition(ContentDisposition.attachment()
-                .filename(gameCode + "-tagged.zip", StandardCharsets.UTF_8)
+                .filename(exported.fileName(), StandardCharsets.UTF_8)
                 .build());
-        headers.setContentLength(bytes.length);
+        headers.setContentLength(exported.bytes().length);
         return ResponseEntity.ok()
                 .headers(headers)
-                .body(bytes);
+                .body(exported.bytes());
     }
 
     public record CreateGameRequest(

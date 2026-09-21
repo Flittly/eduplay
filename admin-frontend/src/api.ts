@@ -207,6 +207,34 @@ export function adminSetGameTags(
   });
 }
 
+/**
+ * 取服务端在 Content-Disposition 里定下的文件名。
+ *
+ * 文件名必须由服务端给：导出的字节取自「按版本排序选出的那个包」，而列表里的
+ * game.version 是「最近一次上传的 manifest 版本」，两者在版本排序与上传顺序不一致时
+ * 会分叉，前端自己拼会拼出与包内容不符的版本号。
+ * 同源部署（BASE_URL 是相对路径），所以这个响应头读得到。
+ */
+function attachmentFileName(header: string | null, fallback: string): string {
+  if (!header) {
+    // 走到这里说明服务端没给文件名（例如前端先于后端上线），
+    // 结果会是不带版本号的老命名——别静默糊过去。
+    console.warn("[admin] 导出响应缺少 Content-Disposition，回退到不带版本号的文件名");
+    return fallback;
+  }
+  // Spring 带 charset 时会同时给 filename*=UTF-8''…（RFC 5987）与 filename="…"，优先前者
+  const extended = /filename\*=UTF-8''([^;]*)/i.exec(header);
+  if (extended) {
+    try {
+      return decodeURIComponent(extended[1].trim().replace(/^"|"$/g, ""));
+    } catch {
+      /* 转义不合法则退回下面的普通 filename */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain ? plain[1] : fallback;
+}
+
 export async function adminExportTaggedPackage(token: string, gameCode: string) {
   const response = await fetch(`${BASE_URL}/games/${gameCode}/package/export`, {
     headers: auth(token)
@@ -218,7 +246,10 @@ export async function adminExportTaggedPackage(token: string, gameCode: string) 
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${gameCode}-tagged.zip`;
+  link.download = attachmentFileName(
+    response.headers.get("Content-Disposition"),
+    `${gameCode}-tagged.zip`
+  );
   link.click();
   URL.revokeObjectURL(url);
 }
