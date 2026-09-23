@@ -708,24 +708,68 @@ function registerRecoveryHandlers(win) {
           `EduPlay 页面加载失败：${errorDescription}（${errorCode}）。` +
           "本地服务日志：" + path.join(resolveDataDir(), "backend.log")
       },
-      { confirm: () => win.loadURL(appUrl) }
+      { confirm: () => { if (appUrl) win.loadURL(appUrl); } }
     );
   });
 }
 
+/**
+ * 启动过渡页：双击后立刻可见，把「后端没就绪 = 全程黑屏」变成「有反馈的等待」。
+ * 实测（2026-09-22）：本地 SSD 后端就绪要 7.8~9.6 秒，U 盘 2.0 + 杀软的机器更久。
+ * 用 data: 内联，不新增打包产物；秒数计时器让老师确认程序没有卡死。
+ */
+const SPLASH_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    background: #f5f7fa; color: #1f2937;
+  }
+  .wrap { text-align: center; }
+  .spinner {
+    width: 42px; height: 42px; margin: 0 auto 22px;
+    border: 4px solid #dbe3ee; border-top-color: #2f6fed; border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
+  p { font-size: 13px; color: #6b7280; margin: 4px 0; line-height: 1.7; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner"></div>
+    <h1>EduPlay 正在启动</h1>
+    <p>正在准备本地教学服务，请稍候</p>
+    <p id="timer">已等待 0 秒</p>
+    <p>首次在新电脑上启动约需 30–60 秒（与 U 盘速度、杀毒软件有关）</p>
+  </div>
+  <script>
+    var start = Date.now();
+    var el = document.getElementById("timer");
+    setInterval(function () {
+      el.textContent = "已等待 " + Math.round((Date.now() - start) / 1000) + " 秒";
+    }, 1000);
+  </script>
+</body>
+</html>`;
+
 async function createWindow() {
   Menu.setApplicationMenu(null);
 
-  const { port } = await resolveStablePort();
-  currentPort = port;
-  await startBackend(port);
-
+  // ① 窗口先行：立刻加载内联启动页，双击约 1 秒内就有可见反馈，
+  //    而不是等后端健康检查通过才见到界面（那要 8 秒起步，U 盘机更久）。
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 980,
     minHeight: 680,
     show: false,
+    backgroundColor: "#f5f7fa",
     title: "EduPlay",
     webPreferences: {
       contextIsolation: true,
@@ -741,6 +785,16 @@ async function createWindow() {
   registerKeyboardShortcuts(mainWindow);
   registerRecoveryHandlers(mainWindow);
 
+  await mainWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(SPLASH_HTML)}`
+  );
+
+  // ② 幕后起后端：端口稳定策略与超时逻辑原样不动。
+  const { port } = await resolveStablePort();
+  currentPort = port;
+  await startBackend(port);
+
+  // ③ 后端就绪，切到真实页面。
   appUrl = `http://127.0.0.1:${port}/`;
   await mainWindow.loadURL(appUrl);
 
