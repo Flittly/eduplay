@@ -292,7 +292,7 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
         <ul className="settings-info-list">
           <li>
             <span>EduPlay</span>
-            <strong>地理教育游戏平台 · Geography Education Game Platform</strong>
+            <strong>奇偶瓜肥教育平台 · Multi-Subject Education Game Platform</strong>
           </li>
           <li>
             <span>Developer</span>

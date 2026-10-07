@@ -66,7 +66,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
             alt="EduPlay"
           />
           <h1>EduPlay</h1>
-          <p>可插拔地理教育游戏平台</p>
+          <p>可插拔多学科教育游戏平台</p>
           <div className="auth-tag-list">
             <span>本地账号</span>
             <span>积分保留</span>

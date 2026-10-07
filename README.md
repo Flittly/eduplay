@@ -1,4 +1,4 @@
-# EduPlay 地理教育游戏平台（Monorepo）
+# EduPlay 奇偶瓜肥教育平台（Monorepo）
 
 本仓库包含 EduPlay 的完整工程：
 
