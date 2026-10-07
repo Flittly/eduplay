@@ -49,7 +49,7 @@ export default function AppLayout({
             />
             <div>
               <strong>EduPlay</strong>
-              <span>地理教育游戏平台</span>
+              <span>奇偶瓜肥教育平台</span>
               <span className="brand-version">v{__APP_VERSION__}</span>
             </div>
           </div>

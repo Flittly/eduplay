@@ -31,7 +31,7 @@ const dictionaries: Record<Language, Dict> = {
     // 约定：kicker 一律是「该页自己的英文名」（与设置页 settings.kicker 同规则），
     // 中文界面下也保留英文，作为版式上的小标签；title / subtitle 随语言切换。
     "pages.dashboard.title": "游戏中心",
-    "pages.dashboard.subtitle": "选择一个地理游戏开始学习",
+    "pages.dashboard.subtitle": "选择一个学科游戏开始学习",
     "pages.store.title": "游戏商城",
     "pages.store.subtitle": "商城数据来自云端服务器，学生和积分仍保存在本机",
     "pages.store.cloudPrefix": "云端：",
@@ -121,7 +121,7 @@ const dictionaries: Record<Language, Dict> = {
 
     // Page headers — kicker is always the page's own English name
     "pages.dashboard.title": "Game Center",
-    "pages.dashboard.subtitle": "Pick a geography game and start learning",
+    "pages.dashboard.subtitle": "Pick a subject game and start learning",
     "pages.store.title": "Game Store",
     "pages.store.subtitle":
       "Store data comes from the cloud; students and points stay on this device",

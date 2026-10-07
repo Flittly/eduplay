@@ -27,7 +27,7 @@ export default function InfoDialog({ game, onClose }: InfoDialogProps) {
             <p className="page-kicker">
               {game ? "游戏介绍" : "关于平台"}
             </p>
-            <h2>{game ? game.name : "EduPlay 地理教育游戏平台"}</h2>
+            <h2>{game ? game.name : "EduPlay 奇偶瓜肥教育平台"}</h2>
           </div>
           <button
             className="info-modal-close"
@@ -67,10 +67,10 @@ export default function InfoDialog({ game, onClose }: InfoDialogProps) {
         <section className="info-section">
           <h3>平台介绍</h3>
           <p>
-            EduPlay 是面向中学地理课堂的互动游戏平台，由{PLATFORM_DEVELOPER}
-            开发。老师可以按需安装、更新和卸载地理小游戏，在课堂上用于
-            大屏演示、答题互动与学生积分激励；游戏与积分数据保存在本机，
-            离线环境下也可以正常使用。
+            {/* 中文段落刻意不按行硬折：JSX 会把换行拼成一个空格，中文里就成了「数学、 英语」这种瑕疵 */}
+            {"EduPlay 是面向中学课堂的多学科互动游戏平台，覆盖地理、数学、英语、生物、化学等学科，由"}
+            {PLATFORM_DEVELOPER}
+            {"开发。老师可以按需安装、更新和卸载学科小游戏，在课堂上用于大屏演示、答题互动与学生积分激励；游戏与积分数据保存在本机，离线环境下也可以正常使用。"}
           </p>
         </section>
 
