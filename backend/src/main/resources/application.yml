@@ -12,6 +12,15 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # 入口 index.html 的文件名是固定的，一旦被浏览器/Electron 缓存，
+          # 用户升级到新版本后仍会看到旧界面（名字、版本号都是旧的）。
+          # 所以静态资源默认一律「回源校验」，由 Last-Modified 决定是否 304；
+          # 带内容 hash 的 /assets/** 例外，由 StaticResourceCacheConfig 给长缓存。
+          no-cache: true
 
 server:
   port: 7070

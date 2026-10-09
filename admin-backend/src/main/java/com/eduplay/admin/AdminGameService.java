@@ -271,7 +271,7 @@ public class AdminGameService {
         GameProduct product = gameProductRepository.findByGameCode(gameCode)
                 .orElseThrow(() -> new NotFoundException("游戏不存在"));
         GamePackage latest = packageRepository
-                .findFirstByGameIdOrderByVersionDesc(product.getId())
+                .findLatestByGameId(product.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
 
         byte[] original = Files.readAllBytes(
@@ -285,7 +285,7 @@ public class AdminGameService {
      * 导出包文件名，与入库包名（{@code gameCode-version.zip}）同源，末尾加 {@code -tagged}
      * 表示 manifest 里已写入标签。
      *
-     * <p>由服务端命名而不是前端拼：导出的字节来自 {@code findFirstByGameIdOrderByVersionDesc}
+     * <p>由服务端命名而不是前端拼：导出的字节来自 {@code findLatestByGameId}
      * 选出的那个包，前端手上的 {@code game.version}（= 最近一次上传的 manifest 版本）在版本号
      * 字符串排序与上传顺序不一致时并不等于它，前端拼会拼出与内容不符的版本号。
      */

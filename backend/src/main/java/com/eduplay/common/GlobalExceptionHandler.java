@@ -54,7 +54,8 @@ public class GlobalExceptionHandler {
         }
 
         // 入口 HTML 必须不缓存：它的作用就是「刷新时拿到最新的资源清单」，
-        // 真正需要长期缓存的静态资源带内容 hash，按原样走默认策略即可。
+        // 这里走 noStore 比全局的 no-cache 更严；真正需要长期缓存的是带内容 hash 的
+        // /assets/**，由 StaticResourceCacheConfig 单独钉成 max-age=1y。
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_HTML)
                 .cacheControl(CacheControl.noStore())

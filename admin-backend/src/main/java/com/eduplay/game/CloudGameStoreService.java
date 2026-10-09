@@ -124,7 +124,7 @@ public class CloudGameStoreService {
             throw new BusinessException("ENTITLEMENT_REQUIRED", "该游戏权益已失效");
         }
         GamePackage gamePackage = packageRepository
-                .findFirstByGameIdOrderByVersionDesc(game.getId())
+                .findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
         try {
             byte[] original = Files.readAllBytes(
@@ -145,7 +145,7 @@ public class CloudGameStoreService {
     public CoverFile downloadCover(String gameCode) {
         GameProduct game = getGame(gameCode);
         GamePackage gamePackage = packageRepository
-                .findFirstByGameIdOrderByVersionDesc(game.getId())
+                .findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
         try (ZipFile zipFile = new ZipFile(
                 pluginPackageService.resolvePackage(gamePackage).toFile())) {
@@ -260,7 +260,7 @@ public class CloudGameStoreService {
                 .findFirst()
                 .orElse(null);
         String latestVersion = packageRepository
-                .findFirstByGameIdOrderByVersionDesc(game.getId())
+                .findLatestByGameId(game.getId())
                 .map(GamePackage::getVersion)
                 .orElse(game.getVersion());
 

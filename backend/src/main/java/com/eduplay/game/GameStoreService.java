@@ -101,7 +101,7 @@ public class GameStoreService {
                 .filter(game -> "ACTIVE".equals(game.getStatus()))
                 .collect(Collectors.toMap(GameProduct::getId, Function.identity()));
 
-        // ③ 1 次：批量拿各游戏最新版本（替代 N 次 findFirstByGameIdOrderByVersionDesc）
+        // ③ 1 次：批量拿各游戏最新版本（替代 N 次 findLatestByGameId；版本号按**数字段**比，见 Repository）
         Map<Long, String> latestVersionByGame = latestVersionsOf(gameIds);
 
         // ④ 1 次：批量拿标签关联
@@ -150,11 +150,14 @@ public class GameStoreService {
         if (gameIds.isEmpty()) {
             return Map.of();
         }
-        return packageRepository.findLatestVersions(gameIds).stream()
+        return packageRepository.findByGameIdIn(gameIds).stream()
                 .collect(Collectors.toMap(
                         GamePackage::getGameId,
                         GamePackage::getVersion,
-                        (first, second) -> first
+                        // ⚠ 合并函数必须按**版本号语义**取大：原来靠 SQL 的 max(version) 保证每组只返回
+                        //   一条，而那是**字符串** max —— 2.5.9 会压住 2.5.10（见 GamePackageRepository）。
+                        (first, second) -> GamePackageRepository.compareVersion(first, second) >= 0
+                                ? first : second
                 ));
     }
 
@@ -169,7 +172,7 @@ public class GameStoreService {
                 return preloaded;
             }
         }
-        return packageRepository.findFirstByGameIdOrderByVersionDesc(game.getId())
+        return packageRepository.findLatestByGameId(game.getId())
                 .map(GamePackage::getVersion)
                 .orElse(game.getVersion());
     }
@@ -227,7 +230,7 @@ public class GameStoreService {
         GameProduct game = getGame(gameCode);
         ensureEntitlement(teacher.getId(), game);
 
-        GamePackage gamePackage = packageRepository.findFirstByGameIdOrderByVersionDesc(game.getId())
+        GamePackage gamePackage = packageRepository.findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException(
                         "PACKAGE_NOT_FOUND",
                         "该游戏还没有发布插件包"
@@ -364,7 +367,7 @@ public class GameStoreService {
     public byte[] downloadPackage(String authorizationHeader, String gameCode) {
         AppUser teacher = requireTeacher(authorizationHeader);
         GameProduct game = getGame(gameCode);
-        GamePackage gamePackage = packageRepository.findFirstByGameIdOrderByVersionDesc(game.getId())
+        GamePackage gamePackage = packageRepository.findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
         try {
             return Files.readAllBytes(pluginPackageService.resolvePackage(gamePackage));
@@ -381,7 +384,7 @@ public class GameStoreService {
     public CoverFile downloadCover(String gameCode) {
         GameProduct game = getGame(gameCode);
         GamePackage gamePackage = packageRepository
-                .findFirstByGameIdOrderByVersionDesc(game.getId())
+                .findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
         try (ZipFile zipFile = new ZipFile(
                 pluginPackageService.resolvePackage(gamePackage).toFile())) {

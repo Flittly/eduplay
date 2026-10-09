@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, Menu } = require("electron");
+const { app, BrowserWindow, dialog, Menu, session } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
@@ -816,6 +816,20 @@ function stopBackend() {
 }
 
 app.whenReady().then(async () => {
+  // 丢掉上一次运行留下的 HTTP 缓存。
+  //
+  // 为什么必须做：后端新版本给 index.html 发了 no-cache（见
+  // StaticResourceCacheConfig），但**装在用户机器上的旧版本没有**——那份旧
+  // index.html 是按 Last-Modified 启发式缓存的，在它的新鲜期内不会回源校验，
+  // 于是升级后打开还是旧界面（旧名字、旧版本号），看起来像「没更新成功」。
+  // 缓存落在便携数据目录，动它不影响 localStorage（登录态/主题/语言）。
+  // 失败也不该拦住启动：清缓存顶多让本次首屏慢几十毫秒。
+  try {
+    await session.defaultSession.clearCache();
+  } catch (err) {
+    console.warn("清理 HTTP 缓存失败（忽略）：", err);
+  }
+
   try {
     await createWindow();
   } catch (err) {
