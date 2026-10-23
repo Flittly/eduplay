@@ -14,9 +14,11 @@ release-nsis-*/
 release-portable-*/
 release-fresh/
 
-# 构建生成物（运行时由 make-runtime.ps1 生成）
+# 构建生成物（运行时由 make-runtime.ps1 生成；-32 后缀是 32 位链路）
 runtime/
+runtime-32/
 runtime.tmp/
+runtime-32.tmp/
 *.bak
 
 # 编辑器 / 系统文件

@@ -1,6 +1,6 @@
 {
   "name": "eduplay-desktop",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "EduPlay 老师端桌面壳：启动本地 Java 后端并打开原生窗口",
   "main": "main.js",
   "portableDirName": "EduPlay-便携版",
@@ -12,6 +12,7 @@
     "start": "electron .",
     "dist": "electron-builder --win nsis",
     "dist:portable": "electron-builder --win dir -c.directories.output=release-portable && node scripts/rename-portable.js",
+    "dist:portable:32": "electron-builder --win dir --ia32 --config electron-builder-32.yml && node scripts/rename-portable.js --arch ia32",
     "release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1"
   },
   "devDependencies": {
@@ -26,12 +27,17 @@
     },
     "files": [
       "main.js",
-      "preload.js"
+      "preload.js",
+      "ball.html"
     ],
     "extraResources": [
       {
         "from": "../backend/target/eduplay-backend.jar",
         "to": "app.jar"
+      },
+      {
+        "from": "build/ball-logo.png",
+        "to": "ball-logo.png"
       },
       {
         "from": "runtime",

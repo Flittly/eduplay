@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, Menu, session } = require("electron");
+const { app, BrowserWindow, dialog, Menu, session, Tray, Menu: MenuBuilder, ipcMain, screen, nativeImage } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
@@ -138,10 +138,80 @@ if (fs.existsSync(path.join(exeDir, "portable.txt"))) {
 
 let backendProcess = null;
 let mainWindow = null;
+let ballWindow = null;
+let tray = null;
 let currentPort = null;
 // 首页地址。刷新/恢复一律回到这个地址，而不是当前地址 —— 万一后端没能提供
 // 前端路由兜底，深链接刷新会拿到接口错误页，回首页至少保证程序还能用。
 let appUrl = null;
+
+// ── 悬浮球常驻模式 ────────────────────────────────────────────────────
+// 桌面壳行为（关窗收起为球、球的位置记忆、是否启动即收起）存在 userData 下
+// 的 desktop-settings.json，而非 localStorage（主进程在窗口创建前就要读）或
+// 后端 app_settings（那是平台业务表）。详见 docs/floating-ball-mode-design.md。
+const DESKTOP_SETTINGS_FILE = "desktop-settings.json";
+const DEFAULT_BALL_SIZE = 56;
+const BALL_MARGIN = 24;
+
+function readDesktopSettings() {
+  try {
+    const file = path.join(app.getPath("userData"), DESKTOP_SETTINGS_FILE);
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, "utf8"));
+    }
+  } catch {
+    // 配置损坏就退回默认，绝不让程序因为一个配置文件起不来
+  }
+  return {};
+}
+
+function writeDesktopSettings(patch) {
+  try {
+    const file = path.join(app.getPath("userData"), DESKTOP_SETTINGS_FILE);
+    const current = readDesktopSettings();
+    const next = { ...current, ...patch };
+    fs.writeFileSync(file, JSON.stringify(next, null, 2), "utf8");
+    return next;
+  } catch {
+    return patch;
+  }
+}
+
+function ballModeEnabled() {
+  return readDesktopSettings().ballMode === true;
+}
+
+/**
+ * 把悬浮球位置钳制到某个显示器的可见工作区内。拔掉副屏 / 改分辨率后，球
+ * 可能落在所有屏幕之外（变成「软件消失了」），所以每次显示前都要 clamp。
+ */
+function clampBallPosition(x, y) {
+  const size = DEFAULT_BALL_SIZE;
+  const displays = screen.getAllDisplays();
+  const candidates = displays.map((d) => d.workArea);
+  for (const wa of candidates) {
+    if (x >= wa.x && y >= wa.y && x < wa.x + wa.width && y < wa.y + wa.height) {
+      return { x, y };
+    }
+  }
+  const primary = screen.getPrimaryDisplay().workArea;
+  const snapped = {
+    x: primary.x + primary.width - size - BALL_MARGIN,
+    y: primary.y + primary.height - size - BALL_MARGIN
+  };
+  // 若主屏工作区小到放不下，退回左上角，保证球一定可见
+  if (snapped.x < primary.x) snapped.x = primary.x + BALL_MARGIN;
+  if (snapped.y < primary.y) snapped.y = primary.y + BALL_MARGIN;
+  return snapped;
+}
+
+function loadBallPosition() {
+  const p = readDesktopSettings().ballPosition;
+  if (p && typeof p.x === "number" && typeof p.y === "number") {
+    return clampBallPosition(p.x, p.y);
+  }
+  return clampBallPosition(-99999, -99999);
+}
 
 function resolveJava() {
   if (app.isPackaged) {
@@ -154,6 +224,31 @@ function resolveJava() {
     }
   }
   return "java";
+}
+
+/**
+ * 32 位构建必须显式给堆参数 —— 这是 32 位与 64 位在"运行期"唯一的差异。
+ *
+ * 实测（2026-10-11，BellSoft JDK 21.0.12 i586）：
+ *   默认 MaxHeapSize = 268435456，即**只有 256 MB**；默认 VM 还是 Client（只有 C1）；
+ *   而 32 位进程的用户态地址空间上限约 2 GB。
+ * 后端是 Spring Boot + H2 + Flyway，轻载能起来，请求一多就 OOM ——
+ * 用户看到的现象是"程序突然自己不见了"，连错误框都来不及弹。
+ *
+ * 所以 32 位固定给一组"够用且留有余量"的参数，64 位一个都不加：
+ *   -Xms64m    启动就占住，避免运行期反复扩容产生的抖动
+ *   -Xmx768m   上限；给 metaspace / 线程栈 / 直接内存留下约 1.2 GB 地址空间
+ *   -server    显式启用 Server VM（C2）。32 位包里 bin/server/jvm.dll 确实存在，
+ *              不加则默认只有 C1，接口延迟会明显变差。
+ *
+ * 判定依据是 process.arch，而不是"打包时写下的标记"：同一个 main.js 要同时
+ * 服务两种产物，运行时自己是什么架构，就用对应参数。
+ */
+function resolveJvmArgs() {
+  if (process.arch === "ia32") {
+    return ["-Xms64m", "-Xmx768m", "-server"];
+  }
+  return [];
 }
 
 function resolveJar() {
@@ -399,7 +494,7 @@ async function startBackend(port) {
 
   backendProcess = spawn(
     java,
-    ["-jar", jar, `--server.port=${port}`],
+    [...resolveJvmArgs(), "-jar", jar, `--server.port=${port}`],
     {
       cwd: dataDir,
       env: {
@@ -779,7 +874,24 @@ async function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (ballModeEnabled() && readDesktopSettings().startMinimized) {
+      // 启动即收起：不闪一下主窗，直接交给悬浮球
+      mainWindow?.hide();
+      showBall();
+    } else {
+      mainWindow?.show();
+    }
+  });
+
+  // 球模式：点 ✕ 是「收起为悬浮球」，不是退出。后端保持运行。
+  // 关键：这里只拦截 close，绝不调 stopBackend —— hide() 不触发 closed，
+  // 真正销毁时（完全退出）由 before-quit 统一清理后端。
+  mainWindow.on("close", (event) => {
+    if (ballModeEnabled() && !app.isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+      showBall();
+    }
   });
 
   registerKeyboardShortcuts(mainWindow);
@@ -800,7 +912,11 @@ async function createWindow() {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
-    stopBackend();
+    // 不再在这里无条件 stopBackend：球模式下主窗销毁时后端仍要为球服务。
+    // 真正的后端清理统一走 before-quit。仅当球模式未开启时，主窗关闭才意味着退出。
+    if (!ballModeEnabled()) {
+      stopBackend();
+    }
   });
 }
 
@@ -813,6 +929,375 @@ function stopBackend() {
     }
   }
   backendProcess = null;
+}
+
+// ── 悬浮球窗口生命周期 ────────────────────────────────────────────────
+
+function resolveBallLogo() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "ball-logo.png");
+  }
+  return path.join(__dirname, "build", "ball-logo.png");
+}
+
+// ── 球窗尺寸守卫 ──────────────────────────────────────────────────────
+// 球窗只有 56×56，任何"外部"改动都会让它肉眼变小：
+//   ① Windows 按显示器 DPI 重算窗口矩形（高缩放下 WM_DPICHANGED 会把窗口
+//      按新比例改大小）；
+//   ② Chromium 的页面缩放被持久化 —— 球是 alwaysOnTop 的，光标停在球上时
+//      按 Ctrl+滚轮 / 触控板双指捏合，zoomFactor 会从 1 掉到 0.5、0.25，
+//      而且这个值按 origin 记在 userData 里，下次启动还是小的；
+//   ③ 第三方窗口工具（对齐/贴边软件）强行 setBounds。
+// 光靠 CSS 挡不住 ①②，所以在主进程里钉死尺寸 + 自检纠正，并把每次纠正
+// 连同当时的 DPI scale 写进 ball-debug.log，方便事后判断到底是哪一类。
+function ballLog(tag, detail) {
+  try {
+    const line = `[${new Date().toISOString()}] ${tag} ${detail}\n`;
+    fs.appendFileSync(path.join(app.getPath("userData"), "ball-debug.log"), line, "utf8");
+  } catch {
+    // 日志写不进去也不能影响球本身
+  }
+}
+
+let ballSizeGuardTimer = null;
+let ballSizeFixing = false;
+
+/**
+ * 把球窗的尺寸与页面缩放拉回基准值。返回非空字符串表示"这次真的修过"，
+ * 同时已写日志；返回空串表示本来就正常。
+ */
+function ensureBallSize(trigger) {
+  if (!ballWindow || ballWindow.isDestroyed() || ballSizeFixing) return "";
+  let bounds;
+  try {
+    bounds = ballWindow.getBounds();
+  } catch {
+    return "";
+  }
+  const notes = [];
+  if (bounds.width !== DEFAULT_BALL_SIZE || bounds.height !== DEFAULT_BALL_SIZE) {
+    notes.push(`bounds=${bounds.width}x${bounds.height}->${DEFAULT_BALL_SIZE}`);
+    ballSizeFixing = true;
+    try {
+      ballWindow.setBounds({
+        x: bounds.x,
+        y: bounds.y,
+        width: DEFAULT_BALL_SIZE,
+        height: DEFAULT_BALL_SIZE
+      }, false);
+    } catch {
+      // 窗口正在销毁/最小化时可能抛，忽略即可
+    }
+    ballSizeFixing = false;
+  }
+  try {
+    const zoom = ballWindow.webContents.getZoomFactor();
+    if (Math.abs(zoom - 1) > 0.005) {
+      notes.push(`zoom=${zoom.toFixed(3)}->1`);
+      ballWindow.webContents.setZoomFactor(1);
+    }
+  } catch {
+    // webContents 已销毁
+  }
+  if (!notes.length) return "";
+  let dpi = "?";
+  try {
+    dpi = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y }).scaleFactor;
+  } catch {
+    // 取不到就留 ?
+  }
+  const detail = `${trigger} dpi=${dpi} ${notes.join(" ")}`;
+  ballLog("SIZE-FIX", detail);
+  return detail;
+}
+
+/**
+ * 2 秒一次的自检。只在球可见时检查 —— 隐藏着被改小也无所谓，
+ * 每次 showBall() 前还会主动纠正一次。
+ */
+function startBallSizeGuard() {
+  if (ballSizeGuardTimer) return;
+  ballSizeGuardTimer = setInterval(() => {
+    if (!ballWindow || ballWindow.isDestroyed()) {
+      stopBallSizeGuard();
+      return;
+    }
+    if (!ballWindow.isVisible()) return;
+    ensureBallSize("watchdog");
+  }, 2000);
+}
+
+function stopBallSizeGuard() {
+  if (ballSizeGuardTimer) {
+    clearInterval(ballSizeGuardTimer);
+    ballSizeGuardTimer = null;
+  }
+}
+
+function createBallWindow() {
+  const { x, y } = loadBallPosition();
+  ballWindow = new BrowserWindow({
+    width: DEFAULT_BALL_SIZE,
+    height: DEFAULT_BALL_SIZE,
+    x,
+    y,
+    // 56 指的是"网页视口"，不是"含边框的窗口"：含边框时 Windows 会给无边框窗
+    // 预留一圈不可见的尺寸，内容区拿不到完整的 56。
+    useContentSize: true,
+    // 四个方向都锁死：外部任何"把窗口改大/改小"的企图都会被 WM_GETMINMAXINFO 挡掉
+    minWidth: DEFAULT_BALL_SIZE,
+    minHeight: DEFAULT_BALL_SIZE,
+    maxWidth: DEFAULT_BALL_SIZE,
+    maxHeight: DEFAULT_BALL_SIZE,
+    frame: false,
+    transparent: true,
+    // 透明小窗必须显式给全透明底色：不写时 Windows 会给窗口一个默认的
+    // 不透明底色（亮色主题下是白色），在球周围形成一圈方形底块/阴影。
+    backgroundColor: "#00000000",
+    // thickFrame:false 去掉 WS_THICKFRAME，DWM 就不会再给这个无边框窗
+    // 绘制系统级投影（hasShadow:false 在部分 Windows/Electron 组合下不足）。
+    thickFrame: false,
+    roundedCorners: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      // 页面缩放从 1 起步，且下面 did-finish-load 会再钉一次
+      zoomFactor: 1,
+      preload: path.join(__dirname, "preload.js")
+    }
+  });
+  ballWindow.setAlwaysOnTop(true, "screen-saver");
+  // 双保险：显式声明无系统阴影 + 全透明底色（上面 options 已设，这里再落一次）
+  ballWindow.setHasShadow(false);
+  try { ballWindow.setBackgroundColor("#00000000"); } catch { /* 老版本无此方法时忽略 */ }
+  try {
+    ballWindow.setMinimumSize(DEFAULT_BALL_SIZE, DEFAULT_BALL_SIZE);
+    ballWindow.setMaximumSize(DEFAULT_BALL_SIZE, DEFAULT_BALL_SIZE);
+  } catch {
+    // 个别平台上 setMaximumSize 对无边框窗无效，靠下面的守卫兜底
+  }
+
+  ballWindow.loadFile(path.join(__dirname, "ball.html"));
+
+  // ── 球窗口诊断日志 ──────────────────────────────────────────────
+  // 球是无边框透明小窗，出问题时界面上没有任何报错入口。把 preload 异常、
+  // 页面加载失败、渲染进程 console 落到 userData/ball-debug.log，
+  // 这样「logo 不显示 / 拖不动 / 变小」能直接看到原因，不用靠猜。
+  ballWindow.webContents.on("preload-error", (_e, preloadPath, error) => {
+    ballLog("PRELOAD-ERROR", `${preloadPath} :: ${error && error.message}`);
+  });
+  ballWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    ballLog("DID-FAIL-LOAD", `${code} ${desc} ${url}`);
+  });
+  ballWindow.webContents.on("render-process-gone", (_e, details) => {
+    ballLog("RENDER-GONE", `${details.reason} exitCode=${details.exitCode}`);
+  });
+  ballWindow.webContents.on("console-message", (_e, level, message, line, sourceId) => {
+    // Electron 新版把 console-message 的参数合并成一个 details 对象，这里兼容两种签名
+    if (level && typeof level === "object") {
+      ballLog(`CONSOLE-${level.level}`, `${level.message} (${level.sourceId}:${level.lineNumber})`);
+    } else {
+      ballLog(`CONSOLE-${level}`, `${message} (${sourceId}:${line})`);
+    }
+  });
+  // Ctrl+滚轮 / 双指捏合缩放是「过一会变小」最可疑的来源：这个 zoom 值会按
+  // origin 存进 userData，越缩越小且重启后仍然生效。捕获到就立刻拉回 1。
+  if (typeof ballWindow.webContents.on === "function") {
+    ballWindow.webContents.on("zoom-changed", (_e, direction) => {
+      ballLog("ZOOM-CHANGED", `direction=${direction}`);
+      ensureBallSize("zoom-changed");
+    });
+  }
+  ballWindow.webContents.on("did-finish-load", () => {
+    try {
+      ballWindow.webContents.setVisualZoomLevelLimits(1, 1); // 禁止捏合缩放
+      ballWindow.webContents.setZoomFactor(1);
+    } catch {
+      // 老版本没有该 API 时忽略
+    }
+    const b = ballWindow.getBounds();
+    let dpi = "?";
+    try { dpi = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).scaleFactor; } catch { /* 忽略 */ }
+    ballLog("DID-FINISH-LOAD", `${path.join(__dirname, "ball.html")} bounds=${b.width}x${b.height} dpi=${dpi}`);
+    ensureBallSize("did-finish-load");
+    startBallSizeGuard();
+  });
+
+  // 窗口被外部改尺寸的那一刻就纠正，不用等 2 秒的 watchdog。
+  // 节流 800ms：如果某个外部因素在反复改尺寸，避免 setBounds 与 resize 事件
+  // 互相触发成死循环（剩下的交给 watchdog 兜）。
+  let lastResizeFixAt = 0;
+  ballWindow.on("resize", () => {
+    if (ballSizeFixing) return;
+    const now = Date.now();
+    if (now - lastResizeFixAt < 800) return;
+    lastResizeFixAt = now;
+    ensureBallSize("resize");
+  });
+
+  // 拖动结束即持久化位置（下次启动回到这里）。挂在创建处，重建球窗口也能带上。
+  ballWindow.on("moved", () => {
+    const [x, y] = ballWindow.getPosition();
+    writeDesktopSettings({ ballPosition: { x, y } });
+  });
+
+  // 收起状态下主窗被销毁（例如用户从托盘退出前主窗已关）时，球仍在；
+  // 球自己「关闭」不代表退出——只有显式「完全退出」才杀后端。
+  ballWindow.on("closed", () => {
+    stopBallSizeGuard();
+    ballWindow = null;
+  });
+}
+
+function showBall() {
+  if (!ballWindow || ballWindow.isDestroyed()) {
+    createBallWindow();
+  }
+  const { x, y } = loadBallPosition();
+  // 先按基准尺寸落位再显示：被外部改小的窗口如果先显示再纠正，
+  // 用户会看到"先小一下再弹回"的抖动。
+  ensureBallSize("show");
+  ballWindow.setPosition(x, y);
+  ballWindow.showInactive();
+  // showInactive 之后 Windows 可能重新算一次 DPI 矩形，再钉一次。
+  setImmediate(() => ensureBallSize("after-show"));
+}
+
+function hideBall() {
+  if (!ballWindow || ballWindow.isDestroyed()) return;
+  ballWindow.hide();
+  // ⚠️ win32 已确认缺陷（electron/electron#41063）：`frame:false` + `transparent:true`
+  // 的窗口，**每调用一次 hide() 就会被系统缩掉 64×64 px**（minimize() 同理），
+  // 而且是同步发生的："起初大小正常，用几次之后变得特别小" 就是它 ——
+  // 56px 的球减 64 直接归零。min/max 尺寸锁能挡住大部分，但挡不全，
+  // 所以 hide 之后必须立刻把尺寸补回来，再延迟补一次（系统有时延迟应用那次 resize）。
+  ensureBallSize("after-hide");
+  setTimeout(() => ensureBallSize("after-hide-late"), 150);
+}
+
+function expandFromBall() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    // 主窗已被销毁（低内存模式将来可能走到这里）：重建并加载首页
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  hideBall();
+}
+
+function collapseToBall() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.hide();
+  showBall();
+}
+
+function quitCompletely() {
+  stopBackend();
+  app.quit();
+}
+
+// ── 托盘（球模式下「完全退出」的兜底入口）──────────────────────────
+function createTray() {
+  try {
+    // 用悬浮球 logo 做托盘图标：它在 extraResources 里随包分发，
+    // 打包/未打包两种模式都能取到，避免依赖只在打包期存在的 icon.ico。
+    const icon = nativeImage.createFromPath(resolveBallLogo());
+    tray = new Tray(icon);
+    const menu = MenuBuilder.buildFromTemplate([
+      { label: "打开 EduPlay", click: () => expandFromBall() },
+      { label: "收起为悬浮球", click: () => collapseToBall() },
+      { type: "separator" },
+      { label: "完全退出", click: () => quitCompletely() }
+    ]);
+    tray.setToolTip("EduPlay");
+    tray.setContextMenu(menu);
+    tray.on("click", () => expandFromBall());
+  } catch {
+    // 托盘图标缺失不致命，球本身仍是入口
+    tray = null;
+  }
+}
+
+// ── IPC 通道（悬浮球 <-> 主进程、设置页 <-> 主进程）────────────────
+function registerBallIpc() {
+  // 球侧
+  ipcMain.handle("ball:expand", () => expandFromBall());
+
+  // ── 拖拽三段式 ────────────────────────────────────────────────
+  // 坐标全部由主进程用 screen.getCursorScreenPoint() 取：渲染进程的
+  // e.screenX 是 CSS 像素，与 setPosition 的物理像素在 Windows 高分屏缩放下
+  // 会错位，直接拿它定位就会"拖不动"或"跳着走"。
+  // 记录「按下时的窗口位置 + 光标位置」，之后只按位移量平移，球不会跳。
+  let ballDrag = null;
+  ipcMain.handle("ball:drag-start", () => {
+    if (!ballWindow || ballWindow.isDestroyed()) return;
+    const [x, y] = ballWindow.getPosition();
+    const p = screen.getCursorScreenPoint();
+    ballDrag = { winX: x, winY: y, curX: p.x, curY: p.y };
+  });
+  ipcMain.handle("ball:drag", () => {
+    if (!ballWindow || ballWindow.isDestroyed() || !ballDrag) return;
+    const p = screen.getCursorScreenPoint();
+    ballWindow.setPosition(
+      Math.round(ballDrag.winX + (p.x - ballDrag.curX)),
+      Math.round(ballDrag.winY + (p.y - ballDrag.curY))
+    );
+  });
+  ipcMain.handle("ball:drag-end", () => {
+    ballDrag = null;
+  });
+
+  ipcMain.handle("ball:menu", () => {
+    if (tray) tray.popUpContextMenu();
+  });
+  // 悬浮球 logo：主进程直接读文件转成 data: URL 交给渲染进程。
+  // logo 落在 app.asar 之外的 resources/（开发期 build/），用 data: 可以
+  // 完全避开 file:// 的 origin 判定与 CSP 细节，最稳。
+  ipcMain.handle("ball:logo-url", () => {
+    try {
+      const buf = fs.readFileSync(resolveBallLogo());
+      return `data:image/png;base64,${buf.toString("base64")}`;
+    } catch (err) {
+      console.warn("读取悬浮球 logo 失败：", err);
+      return "";
+    }
+  });
+  // 主窗侧：标题栏「收起」/设置里触发
+  ipcMain.handle("desktop:collapse", () => collapseToBall());
+  ipcMain.handle("desktop:quit", () => quitCompletely());
+  // 设置侧
+  ipcMain.handle("desktop:get-settings", () => readDesktopSettings());
+  ipcMain.handle("desktop:set-setting", (_event, key, value) => {
+    const allowed = ["ballMode", "startMinimized"];
+    if (!allowed.includes(key)) return readDesktopSettings();
+    const next = writeDesktopSettings({ [key]: !!value });
+    if (key === "ballMode" && value === true) {
+      // 打开球模式时立即把球和托盘挂上，让「收起」随手可用
+      if (!ballWindow || ballWindow.isDestroyed()) createBallWindow();
+      if (!tray) createTray();
+    }
+    return next;
+  });
+}
+
+// ── 单实例锁 ──────────────────────────────────────────────────────────
+// 常驻后双击两次 exe 是高概率事件；双开 = 两个 java 抢端口 = 端口漂移 =
+// 页面 origin 变端口 → localStorage 全隔离（用户看到「设置被重置」）。
+// 第二个实例一律唤起已存在的实例并退出自己。
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    expandFromBall();
+  });
 }
 
 app.whenReady().then(async () => {
@@ -830,6 +1315,16 @@ app.whenReady().then(async () => {
     console.warn("清理 HTTP 缓存失败（忽略）：", err);
   }
 
+  // 悬浮球：IPC 通道必须无条件注册 —— 设置页的开关在球模式未开启时也要
+  // 能读写配置（否则点「悬浮球常驻」会打到未注册的通道，报「操作失败」）。
+  registerBallIpc();
+
+  // 球模式已开启（上次留下的配置）才预建球窗口 + 托盘。
+  if (ballModeEnabled()) {
+    createBallWindow();
+    createTray();
+  }
+
   try {
     await createWindow();
   } catch (err) {
@@ -842,10 +1337,14 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  stopBackend();
-  app.quit();
+  // 球模式下，主窗与球都关了才退出；否则（球还在）继续驻留。
+  // 真正的后端清理统一走 before-quit，这里只负责决定退不退出。
+  if (!ballModeEnabled() || !ballWindow || ballWindow.isDestroyed()) {
+    app.quit();
+  }
 });
 
 app.on("before-quit", () => {
+  app.isQuitting = true;
   stopBackend();
 });

@@ -103,6 +103,14 @@ const dictionaries: Record<Language, Dict> = {
     "settings.data.hint":
       "删除本机自动填写的本地与云端登录密码。清除后需重新输入密码登录。",
     "settings.section.about": "关于",
+    "settings.section.desktop": "桌面行为",
+    "settings.desktop.ball": "悬浮球常驻",
+    "settings.desktop.ball.hint":
+      "开启后，关闭窗口会把平台收成一个悬浮球常驻桌面，点球即可恢复，正在进行的游戏不会中断。悬浮球模式下本地服务保持运行，请从球右键菜单或托盘选择「完全退出」来彻底结束程序。",
+    "settings.desktop.ball.enabled": "已开启",
+    "settings.desktop.ball.disabled": "已关闭",
+    "settings.desktop.ballOn": "悬浮球常驻已开启，关闭窗口将收成悬浮球",
+    "settings.desktop.ballOff": "悬浮球常驻已关闭，关闭窗口即退出程序",
     "settings.message.saved": "设置已保存",
     "settings.message.failed": "操作失败"
   },
@@ -201,6 +209,14 @@ const dictionaries: Record<Language, Dict> = {
     "settings.data.hint":
       "Removes locally remembered local & cloud login passwords. You will need to type the password again next time.",
     "settings.section.about": "About",
+    "settings.section.desktop": "Desktop behavior",
+    "settings.desktop.ball": "Floating ball",
+    "settings.desktop.ball.hint":
+      "When enabled, closing the window collapses the platform into a floating ball that stays on the desktop; click it to restore. Games in progress are not interrupted. The local service keeps running in ball mode — use \"Quit completely\" from the ball or tray menu to fully exit.",
+    "settings.desktop.ball.enabled": "Enabled",
+    "settings.desktop.ball.disabled": "Disabled",
+    "settings.desktop.ballOn": "Floating ball enabled — closing the window now collapses to a ball",
+    "settings.desktop.ballOff": "Floating ball disabled — closing the window exits the app",
     "settings.message.saved": "Settings saved",
     "settings.message.failed": "Operation failed"
   }

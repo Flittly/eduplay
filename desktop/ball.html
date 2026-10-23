@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!--
+  CSP 注意：必须有 script-src 'unsafe-inline'。
+  之前只写了 default-src 'self'，script-src 会回退到 default-src，而 'self'
+  不允许内联脚本 —— 结果是下面这段 <script> 一次都没执行过：logo 不会被赋值、
+  拖拽/点击监听器压根没绑上（白球能显示是因为 style-src 放行了 CSS）。
+-->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<!--
+  样式铁律（别再往回加）：
+  1) 球窗口是 56×56 的正方形透明窗，任何"溢出到圆外"的装饰都会被窗口矩形裁切，
+     看上去就是一圈方形/矩形的阴影。之前的 `box-shadow: 0 4px 12px` 正是这样：
+     圆外的模糊层被裁到四个角上，形成肉眼可见的方形暗边。
+  2) 球体本身不画底色、不画阴影，只让 PNG（自带透明背景）铺满窗口，
+     视觉上就是一个纯圆形 logo；窗口四角透明度为 0，不会出现色块。
+  3) 需要"立体感"时不能用 CSS 阴影，只能靠 logo 素材本身，否则必然出现方角。
+  4) 球的尺寸必须写死成 56px，**不能写 100%**：窗口一旦被外部因素（DPI 重算、
+     页面缩放）改小，100% 会让 logo 跟着缩成一个小点；写死 56px 则最多是被裁掉
+     一部分，主进程的尺寸守卫会在 2 秒内把窗口拉回 56×56。见 main.js
+     ensureBallSize()。
+-->
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden;
+    background: transparent;   /* 窗口整体透明，杜绝任何底色块 */
+  }
+  body {
+    -webkit-user-select: none; user-select: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #ball {
+    /* 固定 56px + 居中：不随视口尺寸变化，窗口被改小也不会变成"小点" */
+    position: fixed; left: 50%; top: 50%;
+    width: 56px; height: 56px;
+    margin: -28px 0 0 -28px;
+    padding: 0; border: 0;
+    background: transparent;   /* 不再有白色圆底 */
+    box-shadow: none;         /* 方形阴影的元凶，永久移除 */
+    filter: none;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-app-region: no-drag;
+  }
+  #ball img {
+    width: 100%; height: 100%;
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;      /* 等比铺满，四周留白来自 PNG 自身的透明像素 */
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+    -webkit-user-drag: none;
+  }
+</style>
+</head>
+<body>
+  <div id="ball"><img id="ball-logo" alt="EduPlay"></div>
+<script>
+  var ball = document.getElementById("ball");
+  var logo = document.getElementById("ball-logo");
+  var down = null;
+  var moved = 0;
+  var movePending = false;
+
+  function api(name) {
+    return window.eduplayDesktop && window.eduplayDesktop[name];
+  }
+
+  // ── 防"过一会变小" ───────────────────────────────────────────────
+  // 球是 alwaysOnTop 的，光标停在球上时按 Ctrl+滚轮 / 触控板双指捏合，
+  // Chromium 会把页面缩放从 1 降到 0.5、0.25…，而且这个值按 origin 存进
+  // userData，重启后依旧很小。这里直接吞掉滚轮事件（球页没有可滚内容），
+  // 主进程那边还有 setZoomFactor(1) + 尺寸守卫兜底。
+  window.addEventListener("wheel", function (e) {
+    e.preventDefault();
+  }, { passive: false });
+
+  // 视口尺寸变化是排查依据：窗口若被外部改小，这里会留下真实像素值，
+  // console 输出会被主进程写进 ball-debug.log。
+  function logViewport(tag) {
+    console.log(
+      "BALL-VIEWPORT " + tag + " " +
+      window.innerWidth + "x" + window.innerHeight +
+      " dpr=" + window.devicePixelRatio
+    );
+  }
+  window.addEventListener("resize", function () { logViewport("resize"); });
+  logViewport("init");
+
+  // logo 由主进程读文件后以 data: URL 给出（logo 在 app.asar 之外），
+  // data: 已被 img-src 放行，不依赖 file:// 的 origin 判定。
+  if (api("ballLogoUrl")) {
+    api("ballLogoUrl")().then(function (url) {
+      if (url) logo.src = url;
+    }).catch(function () {});
+  }
+
+  // 用 pointer 事件 + setPointerCapture：按下后即使光标移出 56px 小球，
+  // 事件仍持续派发到球上，拖动才不会"拖一下就断"。
+  ball.addEventListener("pointerdown", function (e) {
+    down = { x: e.screenX, y: e.screenY };
+    moved = 0;
+    try { ball.setPointerCapture(e.pointerId); } catch (_) {}
+    if (api("ballDragStart")) api("ballDragStart")();
+    e.preventDefault();
+  });
+
+  ball.addEventListener("pointermove", function (e) {
+    if (!down) return;
+    var d = Math.hypot(e.screenX - down.x, e.screenY - down.y);
+    if (d > moved) moved = d;
+    // 每帧最多发一次，避免 IPC 堆积
+    if (movePending) return;
+    movePending = true;
+    requestAnimationFrame(function () {
+      movePending = false;
+      if (down && api("ballDrag")) api("ballDrag")();
+    });
+  });
+
+  function endDrag(e) {
+    if (!down) return;
+    down = null;
+    try { ball.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (api("ballDragEnd")) api("ballDragEnd")();
+    if (moved < 5 && api("ballExpand")) api("ballExpand")();
+  }
+  ball.addEventListener("pointerup", endDrag);
+  ball.addEventListener("pointercancel", endDrag);
+
+  ball.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    if (api("ballMenu")) api("ballMenu")();
+  });
+</script>
+</body>
+</html>

@@ -31,8 +31,21 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>("checking");
+  const [ballMode, setBallMode] = useState(false);
 
   const isTeacher = userRole === "TEACHER" || userRole === "SUPER_ADMIN";
+
+  // 桌面壳暴露的能力标记。网页版（java -jar + 浏览器）没有这个对象，
+  // 于是整个「桌面行为」分区自动隐藏。
+  const isDesktop = typeof window !== "undefined" && !!window.eduplayDesktop;
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    window.eduplayDesktop
+      ?.getDesktopSettings()
+      .then((s) => setBallMode(s?.ballMode === true))
+      .catch(() => {});
+  }, [isDesktop]);
 
   useEffect(() => {
     getPlatformSettings(token)
@@ -105,6 +118,16 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
    */
   function handleReload() {
     window.location.reload();
+  }
+
+  async function handleBallModeChange(next: boolean) {
+    setBallMode(next);
+    try {
+      await window.eduplayDesktop?.setDesktopSetting("ballMode", next);
+      setNotice(next ? t("settings.desktop.ballOn") : t("settings.desktop.ballOff"));
+    } catch {
+      setError(t("settings.message.failed"));
+    }
   }
 
   return (
@@ -237,6 +260,28 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
               onClick={() => void handleSaveCloudUrl()}
             >
               {savingCloudUrl ? t("settings.plugins.saving") : t("settings.cloud.save")}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* 桌面行为（仅桌面端） */}
+      {isDesktop && (
+        <section className="settings-card">
+          <h2>{t("settings.section.desktop")}</h2>
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <strong>{t("settings.desktop.ball")}</strong>
+              <span>{t("settings.desktop.ball.hint")}</span>
+            </div>
+            <button
+              type="button"
+              className={ballMode ? "primary" : "secondary"}
+              onClick={() => void handleBallModeChange(!ballMode)}
+            >
+              {ballMode
+                ? t("settings.desktop.ball.enabled")
+                : t("settings.desktop.ball.disabled")}
             </button>
           </div>
         </section>

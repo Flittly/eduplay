@@ -13,7 +13,7 @@
 
     <groupId>com.eduplay</groupId>
     <artifactId>eduplay-backend</artifactId>
-    <version>1.5.1</version>
+    <version>1.5.2</version>
     <name>eduplay-backend</name>
     <description>EduPlay multi-subject education game platform backend</description>
 

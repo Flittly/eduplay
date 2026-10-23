@@ -1,0 +1,49 @@
+# 32 位（ia32）便携版专用配置 —— 刻意与 package.json 的 build 段完全独立。
+#
+# ⚠️ 这里必须写**全量**，不能只写与 64 位的差异项。
+#    原因：electron-builder 一旦通过 --config 指定了配置文件，就**不再与
+#    package.json 的 build 段合并**（见 app-builder-lib/out/util/config/load.js
+#    的 getConfig：有 configPath 时只走 readConfig）。漏掉的字段会静默回落成
+#    内置默认值，而不是落回 package.json —— 排查起来非常费劲。
+#
+# 用法：npm run dist:portable:32
+#       （等价于 electron-builder --win dir --ia32 --config electron-builder-32.yml）
+appId: com.eduplay.desktop
+productName: EduPlay
+
+directories:
+  output: release-portable-32
+
+files:
+  - main.js
+  - preload.js
+  - ball.html
+
+extraResources:
+  # 后端 jar 与 64 位是**同一份**：纯 Java、无原生依赖，jar 跨架构通用。
+  # 这也是为什么加一个 32 位版本不需要改后端任何代码。
+  - from: ../backend/target/eduplay-backend.jar
+    to: app.jar
+  # 悬浮球 logo（与 64 位同一份 PNG，纯图片无架构差异）。
+  - from: build/ball-logo.png
+    to: ball-logo.png
+  # 关键差异：32 位专用裁剪运行时。
+  # 生成方式（jlink 不能交叉产出，必须用 32 位 JDK 跑）：
+  #   powershell -File scripts/make-runtime.ps1 -JavaHome <32位JDK路径> -Output runtime-32
+  - from: runtime-32
+    to: jre
+    filter:
+      - "**/*"
+
+win:
+  target: dir
+  icon: build/icon.ico
+
+toolsets:
+  winCodeSign: 0.0.0
+
+electronLanguages:
+  - zh-CN
+  - en-US
+
+icon: build/icon.ico

@@ -32,11 +32,33 @@ const desktopDir = path.resolve(__dirname, "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(desktopDir, "package.json"), "utf8"));
 
 const productName = (pkg.build && pkg.build.productName) || pkg.name;
-const targetName = pkg.portableDirName;
-if (!targetName) {
+if (!pkg.portableDirName) {
   console.error('[portable] package.json 缺少顶层字段 "portableDirName"，无法确定输出目录名');
   process.exit(1);
 }
+
+// --arch <x64|ia32>：目标架构，默认 x64。**不带参数时行为与改造前完全一致。**
+//
+// 为什么必须参数化：electron-builder 的 --dir 产物目录名由架构决定，见
+//   app-builder-lib/out/platformPackager.js -> computeAppOutDir()
+// 它用 getArchSuffix(arch, defaultArch) 拼出 `${platform}-${arch}-unpacked`，
+// 而 x64 是默认架构、后缀为空 —— 所以：
+//   x64  → win-unpacked
+//   ia32 → win-ia32-unpacked
+// 旧版把 "win-unpacked" 写死，一换架构就会在**打包流程的最后一步**才报
+// 「未找到构建产物」，前面几分钟全部白跑。
+let arch = "x64";
+const archIdx = process.argv.indexOf("--arch");
+if (archIdx !== -1 && process.argv[archIdx + 1]) {
+  arch = process.argv[archIdx + 1];
+}
+const isX86 = arch === "ia32";
+const unpackedName = isX86 ? "win-ia32-unpacked" : "win-unpacked";
+
+// 交付根目录与程序目录名都带架构后缀，两版可以在同一台机器上各自构建、互不覆盖。
+// （U 盘上的**数据目录名仍然共用** —— 那是刻意共享的，见 main.js 顶部说明。）
+const defaultDeliveryRootName = isX86 ? "release-portable-32" : "release-portable";
+const targetName = isX86 ? `${pkg.portableDirName}-32` : pkg.portableDirName;
 // 数据目录名的唯一真源，与 main.js 读的是同一个字段。
 // 写死在这里的后果我们踩过一次：改名后日志还印着旧名字，误导人。
 const dataDirName = pkg.portableDataDirName;
@@ -46,21 +68,48 @@ if (!dataDirName) {
 }
 
 // --from <目录>：构建输出根目录。默认与交付目录相同。
-let buildRootName = "release-portable";
+let buildRootName = defaultDeliveryRootName;
 const fromIdx = process.argv.indexOf("--from");
 if (fromIdx !== -1 && process.argv[fromIdx + 1]) {
   buildRootName = process.argv[fromIdx + 1];
 }
 
-const deliveryRoot = path.join(desktopDir, "release-portable");
+const deliveryRoot = path.join(desktopDir, defaultDeliveryRootName);
 const buildRoot = path.isAbsolute(buildRootName) ? buildRootName : path.join(desktopDir, buildRootName);
-const builtDir = path.join(buildRoot, "win-unpacked");
+const builtDir = path.join(buildRoot, unpackedName);
 const finalDir = path.join(deliveryRoot, targetName);
 
 if (!fs.existsSync(builtDir)) {
   console.error(`[portable] 未找到构建产物：${builtDir}`);
   console.error("           请先运行 electron-builder --win dir");
   process.exit(1);
+}
+
+/**
+ * 读 PE 文件头的 Machine 字段，用来**机器可验**地判定真实位数。
+ *   0x14c  = i386（32 位）
+ *   0x8664 = x64 （64 位）
+ * 为什么不看文件名/目录名：那些都是我们自己起的，说它 32 位它就"是"32 位。
+ * 只有 PE 头能回答"这个 exe 到底能不能在 32 位系统上跑"。
+ */
+function readPeMachine(file) {
+  try {
+    const fd = fs.openSync(file, "r");
+    try {
+      const dos = Buffer.alloc(0x40);
+      fs.readSync(fd, dos, 0, 0x40, 0);
+      if (dos.toString("latin1", 0, 2) !== "MZ") return null;
+      const peOffset = dos.readUInt32LE(0x3c);
+      const head = Buffer.alloc(6);
+      fs.readSync(fd, head, 0, 6, peOffset);
+      if (head.toString("latin1", 0, 2) !== "PE") return null;
+      return head.readUInt16LE(4);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
 }
 
 // 复制兜底：删除/移动都可能被外部因素挡住，这时用 robocopy 覆盖目标目录。
@@ -182,6 +231,20 @@ for (const rel of required) {
   const ok = fs.existsSync(path.join(finalDir, rel));
   if (!ok) missing++;
   console.log(`[portable] ${ok ? "OK  " : "缺失"} ${rel}`);
+}
+
+// 架构自检（仅 32 位构建）：确认 exe 与内嵌 JRE 真的是 i386。
+// 32 位产物里混进 64 位文件，在 64 位 Windows 上照样能跑（WoW64），
+// 只有拿到真正的 32 位机器上才会炸 —— 所以必须在交付前用 PE 头卡住。
+if (isX86) {
+  for (const rel of [`${productName}.exe`, path.join("resources", "jre", "bin", "java.exe")]) {
+    const full = path.join(finalDir, rel);
+    const machine = fs.existsSync(full) ? readPeMachine(full) : null;
+    const ok = machine === 0x14c;
+    if (!ok) missing++;
+    const shown = machine === null ? "读不到" : `0x${machine.toString(16)}`;
+    console.log(`[portable] ${ok ? "OK  " : "错架"} ${rel} PE=${shown}${ok ? " (i386)" : "（应为 i386 = 0x14c）"}`);
+  }
 }
 
 // 交付目录里绝不该出现数据目录 —— 那说明它是从别处误拷来的，
