@@ -2,6 +2,7 @@ package com.eduplay.admin;
 
 import com.eduplay.auth.AuthService;
 import com.eduplay.common.BusinessException;
+import com.eduplay.common.FieldLimits;
 import com.eduplay.common.NotFoundException;
 import com.eduplay.game.GamePackage;
 import com.eduplay.game.GamePackageRepository;
@@ -27,6 +28,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -79,14 +81,17 @@ public class AdminGameService {
     @Transactional
     public GameResponse createGame(String authorization, CreateGameRequest request) {
         authService.requireAdmin(authorization);
-        String gameCode = request.gameCode().trim();
+        // 下面三个字段直接进 varchar 列。不在这里拦长度，就变成一条没有原因的 500
+        String gameCode = FieldLimits.requireText(
+                "游戏代码", request.gameCode(), FieldLimits.GAME_CODE);
         if (gameProductRepository.findByGameCode(gameCode).isPresent()) {
             throw new BusinessException("GAME_CODE_EXISTS", "游戏代码已存在");
         }
 
         GameProduct product = new GameProduct();
         product.setGameCode(gameCode);
-        product.setName(request.name().trim());
+        product.setName(FieldLimits.requireText("名称", request.name(), FieldLimits.NAME));
+        FieldLimits.check("简介", request.description(), FieldLimits.DESCRIPTION);
         product.setDescription(request.description());
         product.setPriceCents(request.priceCents() == null ? 0 : request.priceCents());
         product.setStatus("DRAFT");
@@ -133,44 +138,46 @@ public class AdminGameService {
             ManifestInfo manifest = readManifest(bytes, gameCode);
             String packageName = sanitize(gameCode) + "-" + sanitizeVersion(manifest.version()) + ".zip";
 
-            pluginPackageService.savePackage(packageName, bytes);
-            long size = bytes.length;
-            String sha256 = pluginPackageService.computeSha256(
-                    pluginPackageService.resolvePackage(toTempPackage(gameCode, packageName))
-            );
+            // 先写临时文件：下面任何一步失败，盘上原来的那一版真包都不会被动过
+            Path staged = pluginPackageService.stagePackage(packageName, bytes);
+            try {
+                long size = bytes.length;
+                String sha256 = pluginPackageService.computeSha256(staged);
 
-            GamePackage gamePackage = packageRepository
-                    .findByGameIdAndVersion(product.getId(), manifest.version())
-                    .orElseGet(GamePackage::new);
-            gamePackage.setGameId(product.getId());
-            gamePackage.setVersion(manifest.version());
-            gamePackage.setPackageName(packageName);
-            gamePackage.setSha256(sha256);
-            gamePackage.setSizeBytes(size);
-            gamePackage.setStatus("PUBLISHED");
-            packageRepository.save(gamePackage);
+                GamePackage gamePackage = packageRepository
+                        .findByGameIdAndVersion(product.getId(), manifest.version())
+                        .orElseGet(GamePackage::new);
+                gamePackage.setGameId(product.getId());
+                gamePackage.setVersion(manifest.version());
+                gamePackage.setPackageName(packageName);
+                gamePackage.setSha256(sha256);
+                gamePackage.setSizeBytes(size);
+                gamePackage.setStatus("PUBLISHED");
+                // 用 saveAndFlush 把 UPDATE 推到 try 里执行：「列超长」这类约束
+                // 若留到事务提交时才炸，异常就跑到这一层之外了
+                packageRepository.saveAndFlush(gamePackage);
 
-            product.setVersion(manifest.version());
-            product.setName(manifest.name());
-            if (manifest.description() != null) {
-                product.setDescription(manifest.description());
+                product.setVersion(manifest.version());
+                product.setName(manifest.name());
+                if (manifest.description() != null) {
+                    product.setDescription(manifest.description());
+                }
+                product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
+                if (manifest.cover() != null && !manifest.cover().isBlank()) {
+                    product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
+                }
+                gameProductRepository.saveAndFlush(product);
+                syncManifestTags(product, manifest.tags());
+
+                pluginPackageService.commitPackage(staged, packageName);
+                return toResponse(product);
+            } catch (RuntimeException ex) {
+                pluginPackageService.discardPackage(staged);
+                throw ex;
             }
-            product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
-            if (manifest.cover() != null && !manifest.cover().isBlank()) {
-                product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
-            }
-            gameProductRepository.save(product);
-            syncManifestTags(product, manifest.tags());
-            return toResponse(product);
         } catch (IOException ex) {
             throw new BusinessException("PACKAGE_READ_FAILED", "插件包读取失败");
         }
-    }
-
-    private GamePackage toTempPackage(String gameCode, String packageName) {
-        GamePackage gamePackage = new GamePackage();
-        gamePackage.setPackageName(packageName);
-        return gamePackage;
     }
 
     private ManifestInfo readManifest(byte[] bytes, String expectedGameCode)
@@ -199,11 +206,20 @@ public class AdminGameService {
                                 "manifest.json 缺少 version 或 name"
                         );
                     }
+                    String description = root.path("description").asText(null);
+                    String entryPath = root.path("entry").asText(null);
+                    // 上限在数据库那一侧（varchar(n)）。不在这里拦，就只能等数据库
+                    // 拒收整条 UPDATE —— 报错还会被兜底处理器压成「服务器内部错误」。
+                    // 放在 savePackage 之前，连临时文件都不会产生。
+                    FieldLimits.check("名称", name, FieldLimits.NAME);
+                    FieldLimits.check("版本号", version, FieldLimits.VERSION);
+                    FieldLimits.check("简介", description, FieldLimits.DESCRIPTION);
+                    FieldLimits.check("入口文件", entryPath, FieldLimits.ENTRY);
                     return new ManifestInfo(
                             version,
                             name,
-                            root.path("description").asText(null),
-                            root.path("entry").asText(null),
+                            description,
+                            entryPath,
                             root.path("cover").asText(null),
                             root.path("tags")
                     );

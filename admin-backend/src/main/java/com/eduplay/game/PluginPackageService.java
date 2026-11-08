@@ -42,18 +42,58 @@ public class PluginPackageService {
         return file;
     }
 
-    public Path savePackage(String packageName, byte[] bytes) {
+    /**
+     * 先落到同目录下的临时文件，等数据库写成功后再改名（{@link #commitPackage}）。
+     *
+     * <p>上传的落盘顺序是「写文件 → 写数据库」，而 @Transactional 只回滚数据库：
+     * 直接写正式文件名的话，写库失败时盘上已经被换成新字节、数据库却回滚到旧
+     * sha256，上一版真包被顶掉且无从还原。先落临时文件就没有这个问题。
+     */
+    public Path stagePackage(String packageName, byte[] bytes) {
         try {
             Files.createDirectories(packageDir);
-            Path file = packageDir.resolve(packageName).normalize();
-            if (!file.startsWith(packageDir)) {
-                throw new BusinessException("INVALID_PACKAGE_NAME", "插件包名称不合法");
-            }
-            Files.write(file, bytes);
-            return file;
+            Path target = resolvePackagePath(packageName);
+            Path staging = Files.createTempFile(
+                    packageDir,
+                    target.getFileName() + ".",
+                    ".uploading"
+            );
+            Files.write(staging, bytes);
+            return staging;
         } catch (IOException ex) {
             throw new BusinessException("PACKAGE_SAVE_FAILED", "插件包保存失败");
         }
+    }
+
+    /** 把临时文件改成正式包名。只有数据库已经写成功才应该调它。 */
+    public Path commitPackage(Path staging, String packageName) {
+        try {
+            Path target = resolvePackagePath(packageName);
+            Files.move(staging, target, StandardCopyOption.REPLACE_EXISTING);
+            return target;
+        } catch (IOException ex) {
+            throw new BusinessException("PACKAGE_SAVE_FAILED", "插件包保存失败");
+        }
+    }
+
+    /** 上传失败时清掉临时文件。调用方已经在处理异常，这里不再往外抛。 */
+    public void discardPackage(Path staging) {
+        if (staging == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(staging);
+        } catch (IOException ignored) {
+            // 临时文件删不掉不影响业务：它不叫正式包名，不会被下载或安装到
+        }
+    }
+
+    private Path resolvePackagePath(String packageName) {
+        Path file = packageDir.resolve(packageName).normalize();
+        if (!file.startsWith(packageDir)) {
+            throw new BusinessException("INVALID_PACKAGE_NAME", "插件包名称不合法");
+        }
+        return file;
     }
 
     public void install(Long userId, GameProduct game, GamePackage gamePackage) {

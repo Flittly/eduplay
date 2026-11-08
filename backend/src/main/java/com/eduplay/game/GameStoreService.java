@@ -2,6 +2,7 @@ package com.eduplay.game;
 
 import com.eduplay.auth.AuthService;
 import com.eduplay.common.BusinessException;
+import com.eduplay.common.FieldLimits;
 import com.eduplay.user.AppUser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Comparator;
@@ -273,59 +275,64 @@ public class GameStoreService {
             String packageName = sanitize(gameCode) + "-"
                     + sanitizeVersion(manifest.version()) + ".zip";
 
-            pluginPackageService.savePackage(packageName, bytes);
-
-            GameProduct product = gameProductRepository.findByGameCode(gameCode)
-                    .orElseGet(GameProduct::new);
-            if (product.getId() == null) {
-                product.setGameCode(gameCode);
+            // 先写临时文件：写库或解压失败时，盘上原有的这一版不会被顶掉
+            Path staged = pluginPackageService.stagePackage(packageName, bytes);
+            try {
+                GameProduct product = gameProductRepository.findByGameCode(gameCode)
+                        .orElseGet(GameProduct::new);
+                if (product.getId() == null) {
+                    product.setGameCode(gameCode);
+                    product.setStatus("ACTIVE");
+                }
+                product.setName(manifest.name());
+                if (manifest.description() != null) {
+                    product.setDescription(manifest.description());
+                }
+                product.setVersion(manifest.version());
+                product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
+                if (manifest.cover() != null && !manifest.cover().isBlank()) {
+                    product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
+                }
+                product.setPriceCents(product.getPriceCents() == null ? 0 : product.getPriceCents());
                 product.setStatus("ACTIVE");
-            }
-            product.setName(manifest.name());
-            if (manifest.description() != null) {
-                product.setDescription(manifest.description());
-            }
-            product.setVersion(manifest.version());
-            product.setEntry(manifest.entry() == null ? gameCode : manifest.entry());
-            if (manifest.cover() != null && !manifest.cover().isBlank()) {
-                product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
-            }
-            product.setPriceCents(product.getPriceCents() == null ? 0 : product.getPriceCents());
-            product.setStatus("ACTIVE");
-            gameProductRepository.save(product);
-            syncManifestTags(product, manifest.tags());
+                gameProductRepository.saveAndFlush(product);
+                syncManifestTags(product, manifest.tags());
 
-            GamePackage gamePackage = packageRepository
-                    .findByGameIdAndVersion(product.getId(), manifest.version())
-                    .orElseGet(GamePackage::new);
-            gamePackage.setGameId(product.getId());
-            gamePackage.setVersion(manifest.version());
-            gamePackage.setPackageName(packageName);
-            gamePackage.setSha256(pluginPackageService.computeSha256(
-                    pluginPackageService.resolvePackage(gamePackage)
-            ));
-            gamePackage.setSizeBytes((long) bytes.length);
-            gamePackage.setStatus("PUBLISHED");
-            packageRepository.save(gamePackage);
+                GamePackage gamePackage = packageRepository
+                        .findByGameIdAndVersion(product.getId(), manifest.version())
+                        .orElseGet(GamePackage::new);
+                gamePackage.setGameId(product.getId());
+                gamePackage.setVersion(manifest.version());
+                gamePackage.setPackageName(packageName);
+                gamePackage.setSha256(pluginPackageService.computeSha256(staged));
+                gamePackage.setSizeBytes((long) bytes.length);
+                gamePackage.setStatus("PUBLISHED");
+                packageRepository.saveAndFlush(gamePackage);
 
-            pluginPackageService.install(teacher.getId(), product, gamePackage);
+                // 解压要读包文件，所以先传临时路径；正式文件名等这一步成功后再改
+                pluginPackageService.install(teacher.getId(), product, gamePackage, staged);
 
-            UserGameInstall install = installRepository
-                    .findByUserIdAndGameId(teacher.getId(), product.getId())
-                    .orElseGet(UserGameInstall::new);
-            install.setUserId(teacher.getId());
-            install.setGameId(product.getId());
-            install.setInstalledVersion(manifest.version());
-            install.setStatus("INSTALLED");
-            if (install.getInstalledAt() == null) {
-                install.setInstalledAt(Instant.now());
+                UserGameInstall install = installRepository
+                        .findByUserIdAndGameId(teacher.getId(), product.getId())
+                        .orElseGet(UserGameInstall::new);
+                install.setUserId(teacher.getId());
+                install.setGameId(product.getId());
+                install.setInstalledVersion(manifest.version());
+                install.setStatus("INSTALLED");
+                if (install.getInstalledAt() == null) {
+                    install.setInstalledAt(Instant.now());
+                }
+                installRepository.save(install);
+
+                List<UserEntitlement> entitlements =
+                        entitlementRepository.findByUserIdAndStatus(teacher.getId(), "ACTIVE");
+                List<UserGameInstall> installs = installRepository.findByUserId(teacher.getId());
+                pluginPackageService.commitPackage(staged, packageName);
+                return toStoreGame(product, entitlements, installs);
+            } catch (RuntimeException ex) {
+                pluginPackageService.discardPackage(staged);
+                throw ex;
             }
-            installRepository.save(install);
-
-            List<UserEntitlement> entitlements =
-                    entitlementRepository.findByUserIdAndStatus(teacher.getId(), "ACTIVE");
-            List<UserGameInstall> installs = installRepository.findByUserId(teacher.getId());
-            return toStoreGame(product, entitlements, installs);
         } catch (BusinessException ex) {
             throw ex;
         } catch (IOException ex) {
@@ -569,12 +576,19 @@ public class GameStoreService {
                                 "manifest.json 缺少 version 或 name"
                         );
                     }
+                    String description = root.path("description").asText(null);
+                    String entryPath = root.path("entry").asText(null);
+                    // 与管理端上传同口径：列宽在数据库那一侧，不拦就变成一条 500
+                    FieldLimits.check("名称", name, FieldLimits.NAME);
+                    FieldLimits.check("版本号", version, FieldLimits.VERSION);
+                    FieldLimits.check("简介", description, FieldLimits.DESCRIPTION);
+                    FieldLimits.check("入口文件", entryPath, FieldLimits.ENTRY);
                     return new PluginManifest(
                             gameCode,
                             version,
                             name,
-                            root.path("description").asText(null),
-                            root.path("entry").asText(null),
+                            description,
+                            entryPath,
                             root.path("cover").asText(null),
                             root.path("tags")
                     );
