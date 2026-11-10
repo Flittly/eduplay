@@ -1,6 +1,7 @@
 package com.eduplay.student;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
+
 import com.eduplay.common.NotFoundException;
 import com.eduplay.user.AppUser;
 import org.springframework.context.annotation.Profile;
@@ -18,26 +19,23 @@ import java.util.Set;
 @Profile("local")
 public class ClassManagementService {
 
-    private final AuthService authService;
     private final StudentRepository studentRepository;
     private final TeacherClassRepository classRepository;
     private final StudentPointsLedgerRepository ledgerRepository;
 
     public ClassManagementService(
-            AuthService authService,
             StudentRepository studentRepository,
             TeacherClassRepository classRepository,
             StudentPointsLedgerRepository ledgerRepository
     ) {
-        this.authService = authService;
         this.studentRepository = studentRepository;
         this.classRepository = classRepository;
         this.ledgerRepository = ledgerRepository;
     }
 
     @Transactional(readOnly = true)
-    public List<ClassSummary> listClasses(String authorization) {
-        AppUser teacher = requireTeacher(authorization);
+    public List<ClassSummary> listClasses() {
+        AppUser teacher = requireTeacher();
         Set<String> names = new LinkedHashSet<>();
         classRepository.findByTeacherIdOrderByClassNameAsc(teacher.getId())
                 .forEach(item -> names.add(item.getClassName()));
@@ -53,11 +51,10 @@ public class ClassManagementService {
 
     @Transactional
     public ClassSummary setMonitor(
-            String authorization,
             String className,
             String monitorName
     ) {
-        AppUser teacher = requireTeacher(authorization);
+        AppUser teacher = requireTeacher();
         String normalized = normalize(className);
         TeacherClass record = classRepository
                 .findByTeacherIdAndClassNameIgnoreCase(teacher.getId(), normalized)
@@ -80,8 +77,8 @@ public class ClassManagementService {
     }
 
     @Transactional
-    public void deleteClass(String authorization, String className) {
-        AppUser teacher = requireTeacher(authorization);
+    public void deleteClass(String className) {
+        AppUser teacher = requireTeacher();
         String normalized = normalize(className);
         List<Student> students =
                 studentRepository.findByTeacherIdAndClassNameIgnoreCase(
@@ -144,8 +141,8 @@ public class ClassManagementService {
         return className.trim();
     }
 
-    private AppUser requireTeacher(String authorization) {
-        AppUser user = authService.requireUser(authorization);
+    private AppUser requireTeacher() {
+        AppUser user = AuthContext.requireUser();
         if (!"TEACHER".equals(user.getRole())) {
             throw new NotFoundException("只有教师可以管理班级");
         }

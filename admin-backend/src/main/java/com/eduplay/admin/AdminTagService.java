@@ -1,6 +1,6 @@
 package com.eduplay.admin;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.NotFoundException;
 import com.eduplay.game.GameProduct;
@@ -21,26 +21,23 @@ import java.util.stream.Collectors;
 @Service
 public class AdminTagService {
 
-    private final AuthService authService;
     private final GameTagRepository tagRepository;
     private final GameProductTagRepository productTagRepository;
     private final GameProductRepository productRepository;
 
     public AdminTagService(
-            AuthService authService,
             GameTagRepository tagRepository,
             GameProductTagRepository productTagRepository,
             GameProductRepository productRepository
     ) {
-        this.authService = authService;
         this.tagRepository = tagRepository;
         this.productTagRepository = productTagRepository;
         this.productRepository = productRepository;
     }
 
     @Transactional(readOnly = true)
-    public List<TagResponse> listTags(String authorization) {
-        authService.requireAdmin(authorization);
+    public List<TagResponse> listTags() {
+        AuthContext.requireAdmin();
         return tagRepository.findAll().stream()
                 .sorted(java.util.Comparator
                         .comparing(GameTag::getCategory)
@@ -51,8 +48,8 @@ public class AdminTagService {
     }
 
     @Transactional
-    public TagResponse createTag(String authorization, CreateTagRequest request) {
-        authService.requireAdmin(authorization);
+    public TagResponse createTag(CreateTagRequest request) {
+        AuthContext.requireAdmin();
         String code = request.code() == null ? "" : request.code().trim().toUpperCase(Locale.ROOT);
         String name = request.name() == null ? "" : request.name().trim();
         if (code.isBlank() || name.isBlank()) {
@@ -74,8 +71,8 @@ public class AdminTagService {
     }
 
     @Transactional(readOnly = true)
-    public List<TagResponse> listGameTags(String authorization, Long gameId) {
-        authService.requireAdmin(authorization);
+    public List<TagResponse> listGameTags(Long gameId) {
+        AuthContext.requireAdmin();
         productRepository.findById(gameId)
                 .orElseThrow(() -> new NotFoundException("游戏不存在"));
         return productTagRepository.findByGameId(gameId).stream()
@@ -90,11 +87,10 @@ public class AdminTagService {
 
     @Transactional
     public List<TagResponse> setGameTags(
-            String authorization,
             Long gameId,
             Set<Long> tagIds
     ) {
-        authService.requireAdmin(authorization);
+        AuthContext.requireAdmin();
         GameProduct product = productRepository.findById(gameId)
                 .orElseThrow(() -> new NotFoundException("游戏不存在"));
 

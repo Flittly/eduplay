@@ -1,6 +1,6 @@
 package com.eduplay.game;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
 import com.eduplay.common.BusinessException;
 import com.eduplay.user.AppUser;
 import org.springframework.stereotype.Service;
@@ -28,7 +28,6 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class CloudGameStoreService {
 
-    private final AuthService authService;
     private final GameProductRepository gameProductRepository;
     private final UserEntitlementRepository entitlementRepository;
     private final GamePackageRepository packageRepository;
@@ -39,7 +38,6 @@ public class CloudGameStoreService {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public CloudGameStoreService(
-            AuthService authService,
             GameProductRepository gameProductRepository,
             UserEntitlementRepository entitlementRepository,
             GamePackageRepository packageRepository,
@@ -48,7 +46,6 @@ public class CloudGameStoreService {
             GameTagRepository tagRepository,
             GameProductTagRepository productTagRepository
     ) {
-        this.authService = authService;
         this.gameProductRepository = gameProductRepository;
         this.entitlementRepository = entitlementRepository;
         this.packageRepository = packageRepository;
@@ -59,8 +56,8 @@ public class CloudGameStoreService {
     }
 
     @Transactional(readOnly = true)
-    public List<CloudStoreGame> listStoreGames(String authorizationHeader) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public List<CloudStoreGame> listStoreGames() {
+        AppUser teacher = requireTeacher();
         List<GameProduct> products = gameProductRepository.findByStatusOrderByIdAsc("ACTIVE");
         List<UserEntitlement> entitlements =
                 entitlementRepository.findByUserIdAndStatus(teacher.getId(), "ACTIVE");
@@ -71,8 +68,8 @@ public class CloudGameStoreService {
     }
 
     @Transactional
-    public RedeemResult redeemCode(String authorizationHeader, String rawCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public RedeemResult redeemCode(String rawCode) {
+        AppUser teacher = requireTeacher();
         String codeValue = rawCode == null ? "" : rawCode.trim().toUpperCase();
         ActivationCode code = activationCodeRepository.findByCode(codeValue)
                 .orElseThrow(() -> new BusinessException("INVALID_CODE", "激活码不存在"));
@@ -111,8 +108,8 @@ public class CloudGameStoreService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] downloadPackage(String authorizationHeader, String gameCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public byte[] downloadPackage(String gameCode) {
+        AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
         UserEntitlement entitlement = entitlementRepository
                 .findByUserIdAndGameId(teacher.getId(), game.getId())
@@ -293,12 +290,8 @@ public class CloudGameStoreService {
                 .toList();
     }
 
-    private AppUser requireTeacher(String authorizationHeader) {
-        AppUser user = authService.requireUser(authorizationHeader);
-        if (!"TEACHER".equals(user.getRole())) {
-            throw new BusinessException("FORBIDDEN", "只有教师账号可以使用云端商城");
-        }
-        return user;
+    private AppUser requireTeacher() {
+        return AuthContext.requireTeacher();
     }
 
     private GameProduct getGame(String gameCode) {

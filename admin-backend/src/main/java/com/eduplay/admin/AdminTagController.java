@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,15 +26,12 @@ public class AdminTagController {
     }
 
     @GetMapping("/tags")
-    public ApiResponse<List<AdminTagService.TagResponse>> listTags(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        return ApiResponse.ok(tagService.listTags(authorization));
+    public ApiResponse<List<AdminTagService.TagResponse>> listTags() {
+        return ApiResponse.ok(tagService.listTags());
     }
 
     @PostMapping("/tags")
     public ApiResponse<AdminTagService.TagResponse> createTag(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody CreateTagRequest request
     ) {
         AdminTagService.CreateTagRequest serviceRequest =
@@ -45,25 +41,22 @@ public class AdminTagController {
                         request.name(),
                         request.sortOrder()
                 );
-        return ApiResponse.ok(tagService.createTag(authorization, serviceRequest));
+        return ApiResponse.ok(tagService.createTag(serviceRequest));
     }
 
     @GetMapping("/games/{gameId}/tags")
     public ApiResponse<List<AdminTagService.TagResponse>> listGameTags(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long gameId
     ) {
-        return ApiResponse.ok(tagService.listGameTags(authorization, gameId));
+        return ApiResponse.ok(tagService.listGameTags(gameId));
     }
 
     @PutMapping("/games/{gameId}/tags")
     public ApiResponse<List<AdminTagService.TagResponse>> setGameTags(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long gameId,
             @Valid @RequestBody SetTagsRequest request
     ) {
         return ApiResponse.ok(tagService.setGameTags(
-                authorization,
                 gameId,
                 request.tagIds()
         ));

@@ -55,10 +55,8 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<UserResponse> me(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        return ApiResponse.ok(authService.getCurrentUser(authorization));
+    public ApiResponse<UserResponse> me() {
+        return ApiResponse.ok(authService.getCurrentUser());
     }
 
     public record RegisterRequest(

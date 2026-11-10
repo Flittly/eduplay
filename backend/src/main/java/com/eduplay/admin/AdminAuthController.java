@@ -1,5 +1,6 @@
 package com.eduplay.admin;
 
+import com.eduplay.auth.AuthContext;
 import com.eduplay.auth.AuthService;
 import com.eduplay.common.ApiResponse;
 import com.eduplay.user.UserResponse;
@@ -40,11 +41,10 @@ public class AdminAuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<UserResponse> me(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        authService.requireAdmin(authorization);
-        return ApiResponse.ok(authService.getCurrentUser(authorization));
+    public ApiResponse<UserResponse> me() {
+        // 过滤器已按 /api/v1/admin/** 拦过一次，这里是第二道锁（不查库，只判断角色字段）
+        AuthContext.requireAdmin();
+        return ApiResponse.ok(authService.getCurrentUser());
     }
 
     public record AdminLoginRequest(

@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,29 +29,23 @@ public class AdminCodeController {
     }
 
     @GetMapping
-    public ApiResponse<List<AdminCodeService.CodeResponse>> list(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        return ApiResponse.ok(codeService.listCodes(authorization));
+    public ApiResponse<List<AdminCodeService.CodeResponse>> list() {
+        return ApiResponse.ok(codeService.listCodes());
     }
 
     @PostMapping("/generate")
     public ApiResponse<List<AdminCodeService.CodeResponse>> generate(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody GenerateRequest request
     ) {
         return ApiResponse.ok(codeService.generateCodes(
-                authorization,
                 request.gameCode(),
                 request.count()
         ));
     }
 
     @GetMapping("/export")
-    public ResponseEntity<byte[]> export(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        List<AdminCodeService.CodeResponse> codes = codeService.listCodes(authorization);
+    public ResponseEntity<byte[]> export() {
+        List<AdminCodeService.CodeResponse> codes = codeService.listCodes();
         StringBuilder csv = new StringBuilder("code,gameCode,status,usedBy,createdAt\n");
         for (AdminCodeService.CodeResponse code : codes) {
             csv.append(code.code()).append(",")

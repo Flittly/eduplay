@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,26 +28,22 @@ public class CloudGameStoreController {
     }
 
     @GetMapping("/games")
-    public ApiResponse<List<CloudGameStoreService.CloudStoreGame>> listStoreGames(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        return ApiResponse.ok(cloudGameStoreService.listStoreGames(authorization));
+    public ApiResponse<List<CloudGameStoreService.CloudStoreGame>> listStoreGames() {
+        return ApiResponse.ok(cloudGameStoreService.listStoreGames());
     }
 
     @PostMapping("/redeem")
     public ApiResponse<CloudGameStoreService.RedeemResult> redeemCode(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody RedeemCodeRequest request
     ) {
-        return ApiResponse.ok(cloudGameStoreService.redeemCode(authorization, request.code()));
+        return ApiResponse.ok(cloudGameStoreService.redeemCode(request.code()));
     }
 
     @GetMapping("/games/{gameCode}/package")
     public ResponseEntity<byte[]> downloadPackage(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode
     ) {
-        byte[] bytes = cloudGameStoreService.downloadPackage(authorization, gameCode);
+        byte[] bytes = cloudGameStoreService.downloadPackage(gameCode);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
         headers.setContentDisposition(ContentDisposition.attachment()

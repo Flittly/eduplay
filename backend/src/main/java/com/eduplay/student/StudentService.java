@@ -1,6 +1,7 @@
 package com.eduplay.student;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
+
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.NotFoundException;
 import com.eduplay.game.GameProduct;
@@ -33,18 +34,15 @@ import java.util.UUID;
 @Profile("local")
 public class StudentService {
 
-    private final AuthService authService;
     private final StudentRepository studentRepository;
     private final StudentPointsLedgerRepository ledgerRepository;
     private final GameProductRepository gameProductRepository;
 
     public StudentService(
-            AuthService authService,
             StudentRepository studentRepository,
             StudentPointsLedgerRepository ledgerRepository,
             GameProductRepository gameProductRepository
     ) {
-        this.authService = authService;
         this.studentRepository = studentRepository;
         this.ledgerRepository = ledgerRepository;
         this.gameProductRepository = gameProductRepository;
@@ -52,10 +50,9 @@ public class StudentService {
 
     @Transactional
     public StudentImportResult importStudents(
-            String authorizationHeader,
             MultipartFile file
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         List<StudentRow> rows = parseRows(file);
         List<StudentFailure> failures = new ArrayList<>();
         Set<String> fileStudentKeys = new HashSet<>();
@@ -96,19 +93,18 @@ public class StudentService {
 
     @Transactional(readOnly = true)
     public List<StudentResponse> listStudents(
-            String authorizationHeader,
             String keyword,
             String className
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         return findStudents(teacher.getId(), keyword, className).stream()
                 .map(StudentResponse::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<String> listClassNames(String authorizationHeader) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public List<String> listClassNames() {
+        AppUser teacher = requireTeacher();
         return studentRepository.findByTeacherIdOrderByClassNameAscNameAsc(teacher.getId())
                 .stream()
                 .map(Student::getClassName)
@@ -146,11 +142,10 @@ public class StudentService {
 
     @Transactional(readOnly = true)
     public byte[] createExportWorkbook(
-            String authorizationHeader,
             String keyword,
             String className
     ) throws IOException {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         List<StudentResponse> students = findStudents(
                 teacher.getId(),
                 keyword,
@@ -186,10 +181,9 @@ public class StudentService {
 
     @Transactional
     public StudentResponse addStudent(
-            String authorizationHeader,
             AddStudentRequest request
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         String name = request.name().trim();
         String studentNo = request.studentNo().trim();
         String className = normalizeClassName(request.className());
@@ -221,11 +215,10 @@ public class StudentService {
 
     @Transactional
     public StudentResponse updateStudent(
-            String authorizationHeader,
             Long studentId,
             UpdateStudentRequest request
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         Student student = getOwnedStudent(teacher.getId(), studentId);
         String name = request.name().trim();
         String studentNo = request.studentNo().trim();
@@ -275,8 +268,8 @@ public class StudentService {
     }
 
     @Transactional
-    public void deleteStudent(String authorizationHeader, Long studentId) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public void deleteStudent(Long studentId) {
+        AppUser teacher = requireTeacher();
         Student student = getOwnedStudent(teacher.getId(), studentId);
         ledgerRepository.deleteByStudentId(student.getId());
         studentRepository.delete(student);
@@ -284,11 +277,10 @@ public class StudentService {
 
     @Transactional
     public StudentPointsResponse adjustPoints(
-            String authorizationHeader,
             Long studentId,
             AdjustPointsRequest request
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         Student student = getOwnedStudent(teacher.getId(), studentId);
         int amount = request.amount();
 
@@ -325,10 +317,9 @@ public class StudentService {
 
     @Transactional(readOnly = true)
     public StudentPointsDetailResponse getStudentPoints(
-            String authorizationHeader,
             Long studentId
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         Student student = getOwnedStudent(teacher.getId(), studentId);
         List<StudentPointsLedger> ledgers =
                 ledgerRepository.findByStudentIdOrderByCreatedAtDesc(student.getId());
@@ -557,8 +548,8 @@ public class StudentService {
         }
     }
 
-    private AppUser requireTeacher(String authorizationHeader) {
-        AppUser user = authService.requireUser(authorizationHeader);
+    private AppUser requireTeacher() {
+        AppUser user = AuthContext.requireUser();
         if (!"TEACHER".equals(user.getRole())) {
             throw new BusinessException("FORBIDDEN", "只有教师账号可以管理学生");
         }

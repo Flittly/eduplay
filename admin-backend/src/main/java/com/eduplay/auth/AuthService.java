@@ -101,21 +101,17 @@ public class AuthService {
         }
     }
 
+    /**
+     * 当前用户信息。用户对象由 {@link AuthFilter} 在请求入口装好，这里不再查库。
+     */
     @Transactional(readOnly = true)
-    public UserResponse getCurrentUser(String authorizationHeader) {
-        AppUser user = requireUser(authorizationHeader);
-        return UserResponse.from(user);
+    public UserResponse getCurrentUser() {
+        return UserResponse.from(AuthContext.requireUser());
     }
 
-    @Transactional(readOnly = true)
-    public AppUser requireUser(String authorizationHeader) {
-        String token = extractToken(authorizationHeader);
-        if (token == null) {
-            throw new BusinessException("UNAUTHORIZED", "请先登录");
-        }
-        return requireUserByToken(token);
-    }
-
+    /**
+     * 按 token 取用户：过滤器唯一的认证入口，也是整个服务里唯一校验会话的地方。
+     */
     @Transactional(readOnly = true)
     public AppUser requireUserByToken(String token) {
         if (token == null || token.isBlank()) {
@@ -127,15 +123,6 @@ public class AuthService {
 
         return userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new NotFoundException("用户不存在"));
-    }
-
-    @Transactional(readOnly = true)
-    public AppUser requireAdmin(String authorizationHeader) {
-        AppUser user = requireUser(authorizationHeader);
-        if (!"SUPER_ADMIN".equals(user.getRole())) {
-            throw new BusinessException("FORBIDDEN", "需要管理员权限");
-        }
-        return user;
     }
 
     private LoginResult createSession(AppUser user) {

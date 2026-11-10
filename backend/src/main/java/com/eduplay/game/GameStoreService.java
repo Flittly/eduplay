@@ -1,6 +1,7 @@
 package com.eduplay.game;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
+
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.FieldLimits;
 import com.eduplay.user.AppUser;
@@ -33,7 +34,6 @@ import org.springframework.context.annotation.Profile;
 @Profile("local")
 public class GameStoreService {
 
-    private final AuthService authService;
     private final GameProductRepository gameProductRepository;
     private final UserGameInstallRepository installRepository;
     private final UserEntitlementRepository entitlementRepository;
@@ -45,7 +45,6 @@ public class GameStoreService {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public GameStoreService(
-            AuthService authService,
             GameProductRepository gameProductRepository,
             UserGameInstallRepository installRepository,
             UserEntitlementRepository entitlementRepository,
@@ -55,7 +54,6 @@ public class GameStoreService {
             GameTagRepository tagRepository,
             GameProductTagRepository productTagRepository
     ) {
-        this.authService = authService;
         this.gameProductRepository = gameProductRepository;
         this.installRepository = installRepository;
         this.entitlementRepository = entitlementRepository;
@@ -67,8 +65,8 @@ public class GameStoreService {
     }
 
     @Transactional(readOnly = true)
-    public List<StoreGameResponse> listStoreGames(String authorizationHeader) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public List<StoreGameResponse> listStoreGames() {
+        AppUser teacher = requireTeacher();
         List<GameProduct> products = gameProductRepository.findByStatusOrderByIdAsc("ACTIVE");
         List<UserEntitlement> entitlements =
                 entitlementRepository.findByUserIdAndStatus(teacher.getId(), "ACTIVE");
@@ -85,8 +83,8 @@ public class GameStoreService {
     }
 
     @Transactional(readOnly = true)
-    public List<InstalledGameResponse> listInstalledGames(String authorizationHeader) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public List<InstalledGameResponse> listInstalledGames() {
+        AppUser teacher = requireTeacher();
 
         // ① 1 次：找出要展示的安装记录
         List<UserGameInstall> installs = installRepository.findByUserId(teacher.getId());
@@ -180,8 +178,8 @@ public class GameStoreService {
     }
 
     @Transactional
-    public RedeemResult redeemCode(String authorizationHeader, String rawCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public RedeemResult redeemCode(String rawCode) {
+        AppUser teacher = requireTeacher();
         String codeValue = rawCode == null ? "" : rawCode.trim().toUpperCase();
         ActivationCode code = activationCodeRepository.findByCode(codeValue)
                 .orElseThrow(() -> new BusinessException("INVALID_CODE", "激活码不存在"));
@@ -227,8 +225,8 @@ public class GameStoreService {
     }
 
     @Transactional
-    public StoreGameResponse installGame(String authorizationHeader, String gameCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public StoreGameResponse installGame(String gameCode) {
+        AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
         ensureEntitlement(teacher.getId(), game);
 
@@ -260,11 +258,10 @@ public class GameStoreService {
 
     @Transactional
     public StoreGameResponse installDownloadedPackage(
-            String authorizationHeader,
             String gameCode,
             MultipartFile file
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         if (file.isEmpty()) {
             throw new BusinessException("EMPTY_FILE", "请选择插件包文件");
         }
@@ -342,17 +339,15 @@ public class GameStoreService {
 
     @Transactional
     public StoreGameResponse importDownloadedPackage(
-            String authorizationHeader,
             MultipartFile file
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         if (file.isEmpty()) {
             throw new BusinessException("EMPTY_FILE", "请选择插件包文件");
         }
         try {
             PluginManifest manifest = readManifest(file.getBytes());
             return installDownloadedPackage(
-                    authorizationHeader,
                     manifest.gameCode(),
                     file
             );
@@ -362,8 +357,8 @@ public class GameStoreService {
     }
 
     @Transactional
-    public void uninstallGame(String authorizationHeader, String gameCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public void uninstallGame(String gameCode) {
+        AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
         pluginPackageService.uninstall(teacher.getId(), gameCode);
         installRepository.findByUserIdAndGameId(teacher.getId(), game.getId())
@@ -371,8 +366,8 @@ public class GameStoreService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] downloadPackage(String authorizationHeader, String gameCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public byte[] downloadPackage(String gameCode) {
+        AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
         GamePackage gamePackage = packageRepository.findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
@@ -436,8 +431,8 @@ public class GameStoreService {
     }
 
     @Transactional(readOnly = true)
-    public String installedManifest(String authorizationHeader, String gameCode) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+    public String installedManifest(String gameCode) {
+        AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
         UserGameInstall install = installRepository
                 .findByUserIdAndGameId(teacher.getId(), game.getId())
@@ -649,8 +644,8 @@ public class GameStoreService {
         });
     }
 
-    private AppUser requireTeacher(String authorizationHeader) {
-        AppUser user = authService.requireUser(authorizationHeader);
+    private AppUser requireTeacher() {
+        AppUser user = AuthContext.requireUser();
         if (!"TEACHER".equals(user.getRole())) {
             throw new BusinessException("FORBIDDEN", "只有教师账号可以使用商城");
         }

@@ -1,6 +1,7 @@
 package com.eduplay.game;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
+
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.NotFoundException;
 import com.eduplay.student.Student;
@@ -24,18 +25,15 @@ public class GameScoreService {
 
     private static final int MAX_SCORE = 99999;
 
-    private final AuthService authService;
     private final GameProductRepository gameProductRepository;
     private final StudentRepository studentRepository;
     private final StudentPointsLedgerRepository ledgerRepository;
 
     public GameScoreService(
-            AuthService authService,
             GameProductRepository gameProductRepository,
             StudentRepository studentRepository,
             StudentPointsLedgerRepository ledgerRepository
     ) {
-        this.authService = authService;
         this.gameProductRepository = gameProductRepository;
         this.studentRepository = studentRepository;
         this.ledgerRepository = ledgerRepository;
@@ -43,11 +41,10 @@ public class GameScoreService {
 
     @Transactional
     public GameScoreResponse submitScore(
-            String authorizationHeader,
             String gameCode,
             SubmitScoreRequest request
     ) {
-        AppUser teacher = requireTeacher(authorizationHeader);
+        AppUser teacher = requireTeacher();
         GameProduct game = gameProductRepository.findByGameCode(gameCode)
                 .orElseThrow(() -> new BusinessException("GAME_NOT_FOUND", "游戏不存在"));
 
@@ -116,8 +113,8 @@ public class GameScoreService {
         }
     }
 
-    private AppUser requireTeacher(String authorizationHeader) {
-        AppUser user = authService.requireUser(authorizationHeader);
+    private AppUser requireTeacher() {
+        AppUser user = AuthContext.requireUser();
         if (!"TEACHER".equals(user.getRole())) {
             throw new BusinessException("FORBIDDEN", "只有教师账号可以结算游戏积分");
         }

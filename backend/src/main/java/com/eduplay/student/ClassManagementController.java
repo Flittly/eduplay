@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,18 +28,15 @@ public class ClassManagementController {
 
     @GetMapping
     public ApiResponse<List<ClassManagementService.ClassSummary>> list(
-            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
-        return ApiResponse.ok(classService.listClasses(authorization));
+        return ApiResponse.ok(classService.listClasses());
     }
 
     @PutMapping("/monitor")
     public ApiResponse<ClassManagementService.ClassSummary> setMonitor(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody MonitorRequest request
     ) {
         return ApiResponse.ok(classService.setMonitor(
-                authorization,
                 request.className(),
                 request.monitorName()
         ));
@@ -48,10 +44,9 @@ public class ClassManagementController {
 
     @DeleteMapping
     public ApiResponse<Void> delete(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam String className
     ) {
-        classService.deleteClass(authorization, className);
+        classService.deleteClass(className);
         return ApiResponse.ok();
     }
 

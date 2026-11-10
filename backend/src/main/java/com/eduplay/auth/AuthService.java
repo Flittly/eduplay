@@ -79,8 +79,8 @@ public class AuthService {
     }
 
     @Transactional
-    public UserResponse updateProfile(String authorizationHeader, UpdateProfileRequest request) {
-        AppUser user = requireUser(authorizationHeader);
+    public UserResponse updateProfile(UpdateProfileRequest request) {
+        AppUser user = AuthContext.requireUser();
         applyProfile(user, request.nickname(), request.phone(), request.email(),
                 request.gender(), request.birthday());
         userRepository.save(user);
@@ -173,20 +173,16 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public UserResponse getCurrentUser(String authorizationHeader) {
-        AppUser user = requireUser(authorizationHeader);
-        return UserResponse.from(user);
+    public UserResponse getCurrentUser() {
+        return UserResponse.from(AuthContext.requireUser());
     }
 
-    @Transactional(readOnly = true)
-    public AppUser requireUser(String authorizationHeader) {
-        String token = extractToken(authorizationHeader);
-        if (token == null) {
-            throw new BusinessException("UNAUTHORIZED", "请先登录");
-        }
-        return requireUserByToken(token);
-    }
-
+    /**
+     * 按 token 查当前用户。这是认证的唯一实现，只被 {@link AuthFilter} 调用。
+     *
+     * <p>保留 public 是为了让过滤器（同包）能调到；业务代码不应该直接用它，
+     * 需要当前用户请用 {@link AuthContext}。
+     */
     @Transactional(readOnly = true)
     public AppUser requireUserByToken(String token) {
         if (token == null || token.isBlank()) {
@@ -203,15 +199,6 @@ public class AuthService {
         // 少了这一句，被禁用的账号就永远踢不出去了。
         if ("DISABLED".equals(user.getStatus())) {
             throw new BusinessException("ACCOUNT_DISABLED", "账号已被禁用");
-        }
-        return user;
-    }
-
-    @Transactional(readOnly = true)
-    public AppUser requireAdmin(String authorizationHeader) {
-        AppUser user = requireUser(authorizationHeader);
-        if (!"SUPER_ADMIN".equals(user.getRole())) {
-            throw new BusinessException("FORBIDDEN", "需要管理员权限");
         }
         return user;
     }

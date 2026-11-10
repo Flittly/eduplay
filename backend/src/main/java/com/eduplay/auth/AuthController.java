@@ -44,7 +44,6 @@ public class AuthController {
 
     @PutMapping("/profile")
     public ApiResponse<UserResponse> updateProfile(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody UpdateProfileRequest request
     ) {
         AuthService.UpdateProfileRequest serviceRequest =
@@ -55,7 +54,7 @@ public class AuthController {
                         request.gender(),
                         request.birthday()
                 );
-        return ApiResponse.ok(authService.updateProfile(authorization, serviceRequest));
+        return ApiResponse.ok(authService.updateProfile(serviceRequest));
     }
 
     @PostMapping("/local/login")
@@ -76,10 +75,8 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<UserResponse> me(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        return ApiResponse.ok(authService.getCurrentUser(authorization));
+    public ApiResponse<UserResponse> me() {
+        return ApiResponse.ok(authService.getCurrentUser());
     }
 
     public record RegisterRequest(

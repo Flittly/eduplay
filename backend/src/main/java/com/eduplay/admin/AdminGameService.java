@@ -1,6 +1,7 @@
 package com.eduplay.admin;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
+
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.FieldLimits;
 import com.eduplay.common.NotFoundException;
@@ -29,7 +30,6 @@ import java.util.zip.ZipInputStream;
 @Service
 public class AdminGameService {
 
-    private final AuthService authService;
     private final GameProductRepository gameProductRepository;
     private final GamePackageRepository packageRepository;
     private final UserEntitlementRepository entitlementRepository;
@@ -37,13 +37,11 @@ public class AdminGameService {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public AdminGameService(
-            AuthService authService,
             GameProductRepository gameProductRepository,
             GamePackageRepository packageRepository,
             UserEntitlementRepository entitlementRepository,
             PluginPackageService pluginPackageService
     ) {
-        this.authService = authService;
         this.gameProductRepository = gameProductRepository;
         this.packageRepository = packageRepository;
         this.entitlementRepository = entitlementRepository;
@@ -51,8 +49,8 @@ public class AdminGameService {
     }
 
     @Transactional(readOnly = true)
-    public List<GameResponse> listGames(String authorization) {
-        authService.requireAdmin(authorization);
+    public List<GameResponse> listGames() {
+        AuthContext.requireAdmin();
         return gameProductRepository.findAll().stream()
                 .sorted(Comparator.comparing(GameProduct::getId))
                 .map(this::toResponse)
@@ -60,8 +58,8 @@ public class AdminGameService {
     }
 
     @Transactional
-    public GameResponse createGame(String authorization, CreateGameRequest request) {
-        authService.requireAdmin(authorization);
+    public GameResponse createGame(CreateGameRequest request) {
+        AuthContext.requireAdmin();
         // 下面三个字段直接进 varchar 列。不在这里拦长度，就变成一条没有原因的 500
         String gameCode = FieldLimits.requireText(
                 "游戏代码", request.gameCode(), FieldLimits.GAME_CODE);
@@ -84,11 +82,10 @@ public class AdminGameService {
 
     @Transactional
     public GameResponse updateStatus(
-            String authorization,
             Long gameId,
             String status
     ) {
-        authService.requireAdmin(authorization);
+        AuthContext.requireAdmin();
         GameProduct product = gameProductRepository.findById(gameId)
                 .orElseThrow(() -> new NotFoundException("游戏不存在"));
         String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
@@ -102,11 +99,10 @@ public class AdminGameService {
 
     @Transactional
     public GameResponse uploadPackage(
-            String authorization,
             String gameCode,
             MultipartFile file
     ) {
-        authService.requireAdmin(authorization);
+        AuthContext.requireAdmin();
         GameProduct product = gameProductRepository.findByGameCode(gameCode)
                 .orElseThrow(() -> new NotFoundException("游戏不存在"));
 

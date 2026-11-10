@@ -1,6 +1,6 @@
 package com.eduplay.admin;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
 import com.eduplay.common.BusinessException;
 import com.eduplay.game.ActivationCode;
 import com.eduplay.game.ActivationCodeRepository;
@@ -19,24 +19,21 @@ public class AdminCodeService {
     private static final String ALPHABET =
             "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-    private final AuthService authService;
     private final ActivationCodeRepository activationCodeRepository;
     private final AppUserRepository userRepository;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AdminCodeService(
-            AuthService authService,
             ActivationCodeRepository activationCodeRepository,
             AppUserRepository userRepository
     ) {
-        this.authService = authService;
         this.activationCodeRepository = activationCodeRepository;
         this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
-    public List<CodeResponse> listCodes(String authorization) {
-        authService.requireAdmin(authorization);
+    public List<CodeResponse> listCodes() {
+        AuthContext.requireAdmin();
         return activationCodeRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::toResponse)
                 .toList();
@@ -44,11 +41,10 @@ public class AdminCodeService {
 
     @Transactional
     public List<CodeResponse> generateCodes(
-            String authorization,
             String gameCode,
             int count
     ) {
-        authService.requireAdmin(authorization);
+        AuthContext.requireAdmin();
         if (gameCode == null || gameCode.isBlank()) {
             throw new BusinessException("INVALID_GAME", "游戏代码不能为空");
         }

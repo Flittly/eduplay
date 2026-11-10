@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,14 +29,12 @@ public class AdminGameController {
 
     @GetMapping
     public ApiResponse<List<AdminGameService.GameResponse>> list(
-            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
-        return ApiResponse.ok(gameService.listGames(authorization));
+        return ApiResponse.ok(gameService.listGames());
     }
 
     @PostMapping
     public ApiResponse<AdminGameService.GameResponse> create(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody CreateGameRequest request
     ) {
         AdminGameService.CreateGameRequest serviceRequest =
@@ -47,17 +44,15 @@ public class AdminGameController {
                         request.description(),
                         request.priceCents()
                 );
-        return ApiResponse.ok(gameService.createGame(authorization, serviceRequest));
+        return ApiResponse.ok(gameService.createGame(serviceRequest));
     }
 
     @PatchMapping("/{gameId}/status")
     public ApiResponse<AdminGameService.GameResponse> updateStatus(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long gameId,
             @Valid @RequestBody StatusRequest request
     ) {
         return ApiResponse.ok(gameService.updateStatus(
-                authorization,
                 gameId,
                 request.status()
         ));
@@ -65,11 +60,10 @@ public class AdminGameController {
 
     @PostMapping(value = "/{gameCode}/packages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdminGameService.GameResponse> uploadPackage(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode,
             @RequestParam("file") MultipartFile file
     ) {
-        return ApiResponse.ok(gameService.uploadPackage(authorization, gameCode, file));
+        return ApiResponse.ok(gameService.uploadPackage(gameCode, file));
     }
 
     public record CreateGameRequest(

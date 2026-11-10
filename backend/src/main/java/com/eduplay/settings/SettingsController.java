@@ -1,6 +1,7 @@
 package com.eduplay.settings;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
+
 import com.eduplay.common.ApiResponse;
 import com.eduplay.common.BusinessException;
 import com.eduplay.user.AppUser;
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,20 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/settings")
 public class SettingsController {
 
-    private final AuthService authService;
     private final SettingsService settingsService;
     private final String platformVersion;
     private final String serverPort;
     private final String dataSourceUrl;
 
     public SettingsController(
-            AuthService authService,
             SettingsService settingsService,
             @Value("${eduplay.version:unknown}") String platformVersion,
             @Value("${server.port:8080}") String serverPort,
             @Value("${spring.datasource.url:}") String dataSourceUrl
     ) {
-        this.authService = authService;
         this.settingsService = settingsService;
         this.platformVersion = platformVersion;
         this.serverPort = serverPort;
@@ -41,18 +38,16 @@ public class SettingsController {
 
     @GetMapping
     public ApiResponse<PlatformSettingsResponse> getSettings(
-            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
-        authService.requireUser(authorization);
+        AuthContext.requireUser();
         return ApiResponse.ok(buildResponse());
     }
 
     @PutMapping("/plugin-dir")
     public ApiResponse<PlatformSettingsResponse> updatePluginDir(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody UpdatePluginDirRequest request
     ) {
-        AppUser user = authService.requireUser(authorization);
+        AppUser user = AuthContext.requireUser();
         if (!Set.of("TEACHER", "SUPER_ADMIN").contains(user.getRole())) {
             throw new BusinessException("FORBIDDEN", "只有教师可以修改游戏安装目录");
         }
@@ -62,10 +57,9 @@ public class SettingsController {
 
     @PutMapping("/cloud-url")
     public ApiResponse<PlatformSettingsResponse> updateCloudUrl(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody UpdateCloudUrlRequest request
     ) {
-        AppUser user = authService.requireUser(authorization);
+        AppUser user = AuthContext.requireUser();
         if (!Set.of("TEACHER", "SUPER_ADMIN").contains(user.getRole())) {
             throw new BusinessException("FORBIDDEN", "只有教师可以修改云端服务地址");
         }

@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,28 +33,24 @@ public class GameStoreController {
 
     @GetMapping("/store/games")
     public ApiResponse<List<GameStoreService.StoreGameResponse>> listStoreGames(
-            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
-        return ApiResponse.ok(gameStoreService.listStoreGames(authorization));
+        return ApiResponse.ok(gameStoreService.listStoreGames());
     }
 
     @PostMapping("/store/games/{gameCode}/install")
     public ApiResponse<GameStoreService.StoreGameResponse> installGame(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode
     ) {
-        return ApiResponse.ok(gameStoreService.installGame(authorization, gameCode));
+        return ApiResponse.ok(gameStoreService.installGame(gameCode));
     }
 
     @PostMapping(value = "/store/games/{gameCode}/package-install",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<GameStoreService.StoreGameResponse> installDownloadedPackage(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode,
             @RequestParam("file") MultipartFile file
     ) {
         return ApiResponse.ok(gameStoreService.installDownloadedPackage(
-                authorization,
                 gameCode,
                 file
         ));
@@ -64,29 +59,25 @@ public class GameStoreController {
     @PostMapping(value = "/store/games/import-package",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<GameStoreService.StoreGameResponse> importPackage(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam("file") MultipartFile file
     ) {
         return ApiResponse.ok(gameStoreService.importDownloadedPackage(
-                authorization,
                 file
         ));
     }
 
     @PostMapping("/store/redeem")
     public ApiResponse<GameStoreService.RedeemResult> redeemCode(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody RedeemCodeRequest request
     ) {
-        return ApiResponse.ok(gameStoreService.redeemCode(authorization, request.code()));
+        return ApiResponse.ok(gameStoreService.redeemCode(request.code()));
     }
 
     @GetMapping("/store/games/{gameCode}/package")
     public ResponseEntity<byte[]> downloadPackage(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode
     ) {
-        byte[] bytes = gameStoreService.downloadPackage(authorization, gameCode);
+        byte[] bytes = gameStoreService.downloadPackage(gameCode);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
         headers.setContentDisposition(ContentDisposition.attachment()
@@ -110,28 +101,25 @@ public class GameStoreController {
 
     @GetMapping("/store/games/{gameCode}/manifest")
     public ResponseEntity<String> installedManifest(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode
     ) {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(gameStoreService.installedManifest(authorization, gameCode));
+                .body(gameStoreService.installedManifest(gameCode));
     }
 
     @PostMapping("/store/games/{gameCode}/uninstall")
     public ApiResponse<Void> uninstallGame(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable String gameCode
     ) {
-        gameStoreService.uninstallGame(authorization, gameCode);
+        gameStoreService.uninstallGame(gameCode);
         return ApiResponse.ok();
     }
 
     @GetMapping("/me/games")
     public ApiResponse<List<GameStoreService.InstalledGameResponse>> listInstalledGames(
-            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
-        return ApiResponse.ok(gameStoreService.listInstalledGames(authorization));
+        return ApiResponse.ok(gameStoreService.listInstalledGames());
     }
 
     public record RedeemCodeRequest(

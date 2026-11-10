@@ -1,6 +1,6 @@
 package com.eduplay.admin;
 
-import com.eduplay.auth.AuthService;
+import com.eduplay.auth.AuthContext;
 import com.eduplay.common.BusinessException;
 import com.eduplay.common.NotFoundException;
 import com.eduplay.user.AppUser;
@@ -15,23 +15,20 @@ import java.util.Locale;
 @Service
 public class AdminTeacherService {
 
-    private final AuthService authService;
     private final AppUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
     public AdminTeacherService(
-            AuthService authService,
             AppUserRepository userRepository,
             PasswordEncoder passwordEncoder
     ) {
-        this.authService = authService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
-    public List<TeacherResponse> listTeachers(String authorization, String keyword) {
-        authService.requireAdmin(authorization);
+    public List<TeacherResponse> listTeachers(String keyword) {
+        AuthContext.requireAdmin();
         String normalized = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
 
         return userRepository.findByRoleOrderByCreatedAtDesc("TEACHER").stream()
@@ -44,8 +41,8 @@ public class AdminTeacherService {
     }
 
     @Transactional
-    public TeacherResponse updateStatus(String authorization, Long teacherId, String status) {
-        authService.requireAdmin(authorization);
+    public TeacherResponse updateStatus(Long teacherId, String status) {
+        AuthContext.requireAdmin();
         AppUser teacher = getTeacher(teacherId);
         String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
         if (!"ACTIVE".equals(normalized) && !"DISABLED".equals(normalized)) {
@@ -58,11 +55,10 @@ public class AdminTeacherService {
 
     @Transactional
     public TeacherResponse resetPassword(
-            String authorization,
             Long teacherId,
             String newPassword
     ) {
-        authService.requireAdmin(authorization);
+        AuthContext.requireAdmin();
         AppUser teacher = getTeacher(teacherId);
         if (newPassword == null || newPassword.length() < 6) {
             throw new BusinessException("INVALID_PASSWORD", "新密码至少6位");

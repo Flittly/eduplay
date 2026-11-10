@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,12 +37,10 @@ public class StudentController {
 
     @GetMapping
     public ApiResponse<List<StudentService.StudentResponse>> listStudents(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "className", required = false) String className
     ) {
         return ApiResponse.ok(studentService.listStudents(
-                authorization,
                 keyword,
                 className
         ));
@@ -51,14 +48,12 @@ public class StudentController {
 
     @GetMapping("/classes")
     public ApiResponse<List<String>> listClassNames(
-            @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
-        return ApiResponse.ok(studentService.listClassNames(authorization));
+        return ApiResponse.ok(studentService.listClassNames());
     }
 
     @PostMapping
     public ApiResponse<StudentService.StudentResponse> addStudent(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody AddStudentRequest request
     ) {
         StudentService.AddStudentRequest serviceRequest =
@@ -68,21 +63,19 @@ public class StudentController {
                         request.className(),
                         request.initialPoints()
                 );
-        return ApiResponse.ok(studentService.addStudent(authorization, serviceRequest));
+        return ApiResponse.ok(studentService.addStudent(serviceRequest));
     }
 
     @DeleteMapping("/{studentId}")
     public ApiResponse<Void> deleteStudent(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long studentId
     ) {
-        studentService.deleteStudent(authorization, studentId);
+        studentService.deleteStudent(studentId);
         return ApiResponse.ok();
     }
 
     @PutMapping("/{studentId}")
     public ApiResponse<StudentService.StudentResponse> updateStudent(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long studentId,
             @Valid @RequestBody UpdateStudentRequest request
     ) {
@@ -94,7 +87,6 @@ public class StudentController {
                         request.totalPoints()
                 );
         return ApiResponse.ok(studentService.updateStudent(
-                authorization,
                 studentId,
                 serviceRequest
         ));
@@ -102,14 +94,12 @@ public class StudentController {
 
     @PostMapping("/{studentId}/points")
     public ApiResponse<StudentService.StudentPointsResponse> adjustPoints(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long studentId,
             @Valid @RequestBody AdjustPointsRequest request
     ) {
         StudentService.AdjustPointsRequest serviceRequest =
                 new StudentService.AdjustPointsRequest(request.amount(), request.reason());
         return ApiResponse.ok(studentService.adjustPoints(
-                authorization,
                 studentId,
                 serviceRequest
         ));
@@ -117,18 +107,16 @@ public class StudentController {
 
     @GetMapping("/{studentId}/points")
     public ApiResponse<StudentService.StudentPointsDetailResponse> getStudentPoints(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long studentId
     ) {
-        return ApiResponse.ok(studentService.getStudentPoints(authorization, studentId));
+        return ApiResponse.ok(studentService.getStudentPoints(studentId));
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<StudentService.StudentImportResult> importStudents(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam("file") MultipartFile file
     ) {
-        return ApiResponse.ok(studentService.importStudents(authorization, file));
+        return ApiResponse.ok(studentService.importStudents(file));
     }
 
     @GetMapping("/import/template")
@@ -149,12 +137,10 @@ public class StudentController {
 
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportStudents(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "className", required = false) String className
     ) throws IOException {
         byte[] workbook = studentService.createExportWorkbook(
-                authorization,
                 keyword,
                 className
         );

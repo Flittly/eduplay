@@ -40,11 +40,9 @@ public class AdminAuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<UserResponse> me(
-            @RequestHeader(value = "Authorization", required = false) String authorization
-    ) {
-        authService.requireAdmin(authorization);
-        return ApiResponse.ok(authService.getCurrentUser(authorization));
+    public ApiResponse<UserResponse> me() {
+        // 管理员身份由 AuthFilter 在 /api/v1/admin/** 上统一拦截
+        return ApiResponse.ok(authService.getCurrentUser());
     }
 
     public record AdminLoginRequest(
