@@ -7,6 +7,7 @@ import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -72,6 +73,17 @@ public class SettingsService {
         if (newDir.equals(oldDir)) {
             return newDir;
         }
+        // ⚠ 互相包含必须直接拒绝：
+        //   - 新目录在旧目录**里面**：moveChildren 会枚举到刚刚创建的新目录本身，
+        //     然后试图把它移进它自己（newDir/newDir），必然失败且状态半残；
+        //   - 旧目录在新目录里面：迁移会把父目录往子目录里搬，同样无解。
+        // 这两种输入在设置页里很容易手滑（例如把路径从 D:\games 改成 D:\games\v2）。
+        if (newDir.startsWith(oldDir) || oldDir.startsWith(newDir)) {
+            throw new BusinessException(
+                    "INVALID_PATH",
+                    "新目录不能与当前目录互相包含，请选择一个独立的目录"
+            );
+        }
 
         moveChildren(oldDir, newDir);
         deleteDirIfEmpty(oldDir);
@@ -82,26 +94,41 @@ public class SettingsService {
     }
 
     private void moveChildren(Path oldDir, Path newDir) {
-        try (Stream<Path> children = Files.list(oldDir)) {
-            children.forEach(child -> {
-                Path target = newDir.resolve(child.getFileName());
-                try {
-                    if (Files.exists(target)) {
-                        throw new BusinessException(
-                                "TARGET_EXISTS",
-                                "目标目录已存在同名内容：" + target
-                        );
-                    }
-                    Files.move(child, target, StandardCopyOption.REPLACE_EXISTING);
-                } catch (IOException ex) {
-                    throw new BusinessException(
-                            "MOVE_FAILED",
-                            "迁移已安装游戏失败：" + child.getFileName()
-                    );
-                }
-            });
+        if (!Files.isDirectory(oldDir)) {
+            return;
+        }
+        List<Path> children;
+        try (Stream<Path> stream = Files.list(oldDir)) {
+            children = stream
+                    // 防御：万一走到这里，也绝不把新目录自己搬进自己
+                    .filter(child -> !child.toAbsolutePath().normalize().equals(newDir))
+                    .toList();
         } catch (IOException ex) {
             throw new BusinessException("MOVE_FAILED", "读取旧安装目录失败");
+        }
+
+        // 先整批检查冲突再动手：原来是边遍历边移动，遇到第 3 个同名目录才失败，
+        // 此时前 2 个已经搬过去了 —— 用户看到的是"迁移失败"，磁盘上却是搬了一半。
+        for (Path child : children) {
+            Path target = newDir.resolve(child.getFileName());
+            if (Files.exists(target)) {
+                throw new BusinessException(
+                        "TARGET_EXISTS",
+                        "目标目录已存在同名内容：" + target
+                );
+            }
+        }
+
+        for (Path child : children) {
+            Path target = newDir.resolve(child.getFileName());
+            try {
+                Files.move(child, target, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ex) {
+                throw new BusinessException(
+                        "MOVE_FAILED",
+                        "迁移已安装游戏失败：" + child.getFileName()
+                );
+            }
         }
     }
 

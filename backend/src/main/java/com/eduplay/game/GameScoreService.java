@@ -53,7 +53,13 @@ public class GameScoreService {
             throw new BusinessException("INVALID_SCORE", "本次游戏积分应在0到99999之间");
         }
 
-        Student student = studentRepository.findByIdAndTeacherId(
+        // 加行锁：同一个学生的结算被串行化。
+        // 这一步同时修掉两个并发缺陷：
+        //   ① 「existsByIdempotencyKey 再 insert」的 check-then-act —— 锁内不可能有两个
+        //      请求同时看不到这条流水，因此同一 roundId 不会双写（也就不会撞唯一键 500）；
+        //   ② 「读 totalPoints → 加 → 存」被并发覆盖 —— 学生表有 @Version，
+        //      冲突会抛乐观锁异常，而这里没有任何重试。
+        Student student = studentRepository.findForUpdateByIdAndTeacherId(
                         request.studentId(),
                         teacher.getId()
                 )

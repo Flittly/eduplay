@@ -11,6 +11,7 @@ import com.eduplay.game.GameProduct;
 import com.eduplay.game.GameProductRepository;
 import com.eduplay.game.PluginPackageService;
 import com.eduplay.game.UserEntitlementRepository;
+import com.eduplay.game.UserGameInstallRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,17 +23,24 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 @Service
 public class AdminGameService {
 
+    /** URL / 文件名安全：字母、数字、下划线、短横线。 */
+    private static final java.util.regex.Pattern GAME_CODE_PATTERN =
+            java.util.regex.Pattern.compile("^[A-Za-z0-9_-]+$");
+
     private final GameProductRepository gameProductRepository;
     private final GamePackageRepository packageRepository;
     private final UserEntitlementRepository entitlementRepository;
+    private final UserGameInstallRepository installRepository;
     private final PluginPackageService pluginPackageService;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -40,21 +48,52 @@ public class AdminGameService {
             GameProductRepository gameProductRepository,
             GamePackageRepository packageRepository,
             UserEntitlementRepository entitlementRepository,
+            UserGameInstallRepository installRepository,
             PluginPackageService pluginPackageService
     ) {
         this.gameProductRepository = gameProductRepository;
         this.packageRepository = packageRepository;
         this.entitlementRepository = entitlementRepository;
+        this.installRepository = installRepository;
         this.pluginPackageService = pluginPackageService;
     }
 
     @Transactional(readOnly = true)
     public List<GameResponse> listGames() {
         AuthContext.requireAdmin();
-        return gameProductRepository.findAll().stream()
+        List<GameProduct> products = gameProductRepository.findAll().stream()
                 .sorted(Comparator.comparing(GameProduct::getId))
-                .map(this::toResponse)
                 .toList();
+        // 原先每行 3 次查询（权益数、安装数、版本数），13 个游戏 = 39 次；
+        // 改成 3 条 group by 各查一次，之后全部在内存里组装。
+        Map<Long, Long> entitlementCounts = toCountMap(entitlementRepository.countGroupByGameId());
+        Map<Long, Long> installCounts = toCountMap(installRepository.countGroupByGameId());
+        Map<Long, Long> packageCounts = toCountMap(packageRepository.countGroupByGameId());
+
+        return products.stream()
+                .map(product -> new GameResponse(
+                        product.getId(),
+                        product.getGameCode(),
+                        product.getName(),
+                        product.getDescription(),
+                        product.getPriceCents(),
+                        product.getStatus(),
+                        product.getVersion(),
+                        entitlementCounts.getOrDefault(product.getId(), 0L),
+                        installCounts.getOrDefault(product.getId(), 0L),
+                        packageCounts.getOrDefault(product.getId(), 0L)
+                ))
+                .toList();
+    }
+
+    private static Map<Long, Long> toCountMap(List<Object[]> rows) {
+        Map<Long, Long> result = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row[0] != null && row[1] != null) {
+                result.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+            }
+        }
+        return result;
     }
 
     @Transactional
@@ -63,6 +102,15 @@ public class AdminGameService {
         // 下面三个字段直接进 varchar 列。不在这里拦长度，就变成一条没有原因的 500
         String gameCode = FieldLimits.requireText(
                 "游戏代码", request.gameCode(), FieldLimits.GAME_CODE);
+        // gameCode 会拼进 URL（/api/v1/store/games/{gameCode}/cover）与磁盘文件名
+        // （文件名那侧有 sanitize，URL 那侧没有）。允许中文、空格、斜杠就会造出
+        // 「建得进去、但封面和包都取不到」的游戏，因此这里只放行 URL 安全的字符。
+        if (!GAME_CODE_PATTERN.matcher(gameCode).matches()) {
+            throw new BusinessException(
+                    "INVALID_GAME_CODE",
+                    "游戏代码只能包含字母、数字、下划线和短横线"
+            );
+        }
         if (gameProductRepository.findByGameCode(gameCode).isPresent()) {
             throw new BusinessException("GAME_CODE_EXISTS", "游戏代码已存在");
         }
@@ -223,7 +271,8 @@ public class AdminGameService {
                 product.getStatus(),
                 product.getVersion(),
                 entitlementRepository.countByGameId(product.getId()),
-                0,
+                // 原先这里硬编码 0，管理端永远显示「0 台安装」。
+                installRepository.countByGameId(product.getId()),
                 packageRepository.findByGameIdOrderByVersionDesc(product.getId()).size()
         );
     }

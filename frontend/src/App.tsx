@@ -52,8 +52,11 @@ export default function App() {
         // 只有后端明确回答「令牌无效」才清凭证。
         // 后端没起来、局域网抖动、代理 502 时保留登录态 —— 否则老师
         // 一开电脑（服务还在启动中）就被踢回登录页，还得重输密码。
-        const rejected =
-          err instanceof ApiError && (err.status === 401 || err.status === 403);
+        //
+        // 只看 401：403 的语义是「已登录但没权限」（例如教师账号碰到管理员接口），
+        // 把 403 也当成凭证失效会把一个正常的权限提示变成强制下线。
+        // 账号被禁用后端返回的也是 401（文案里会写明原因）。
+        const rejected = err instanceof ApiError && err.status === 401;
         if (!rejected) {
           return;
         }

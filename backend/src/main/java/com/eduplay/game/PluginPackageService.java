@@ -2,6 +2,8 @@ package com.eduplay.game;
 
 import com.eduplay.common.BusinessException;
 import com.eduplay.settings.SettingsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -15,11 +17,24 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 @Service
 public class PluginPackageService {
+
+    private static final Logger log = LoggerFactory.getLogger(PluginPackageService.class);
+
+    /**
+     * 解压保护上限。zip 的"解压后大小"写在每个 entry 的头里，但这个值可以伪造
+     * （zip bomb 的常规做法），所以这里累计的是**实际写出**的字节数。
+     *
+     * <p>现有最大包 7 MB、解压后约 12 MB；512 MB / 2 万个文件留了两个数量级的余量，
+     * 正常插件包不可能碰到，而一个 42.zip 式的炸弹会被这里挡住。
+     */
+    private static final long MAX_UNCOMPRESSED_BYTES = 512L * 1024 * 1024;
+    private static final int MAX_ENTRIES = 20_000;
 
     private final Path packageDir;
     private final SettingsService settingsService;
@@ -113,72 +128,124 @@ public class PluginPackageService {
      *
      * <p>上传流程里文件此时还叫临时名（尚未 commitPackage），所以不能走
      * 「按包名去 resolvePackage」那条路 —— 那样会报「插件包文件不存在」。
+     *
+     * <h3>为什么先解到临时目录再整体换名</h3>
+     * 原先是 {@code deleteRecursively(targetRoot)} 之后才解压：解到一半磁盘满、
+     * 包损坏、进程被杀，旧版本就已经没了 —— 界面上游戏还显示"已安装"，
+     * 点进去全是 404，只能重装。现在解压全部在 {@code xxx.installing-<uuid>}
+     * 里完成，最后一步才把旧目录挪走、把新目录改名上来；失败时旧目录原地不动。
      */
     public void install(Long userId, GameProduct game, GamePackage gamePackage, Path packageFile) {
+        if (!Files.isRegularFile(packageFile)) {
+            throw new BusinessException(
+                    "PACKAGE_NOT_FOUND",
+                    "插件包文件不存在：" + packageFile.getFileName()
+            );
+        }
+        Path targetRoot = installedRoot(userId, game.getGameCode(), gamePackage.getVersion());
+        Path parent = targetRoot.getParent();
+        Path stagingRoot = parent.resolve(
+                targetRoot.getFileName() + ".installing-" + UUID.randomUUID()
+        );
+        Path backupRoot = parent.resolve(
+                targetRoot.getFileName() + ".old-" + UUID.randomUUID()
+        );
+
         try {
-            if (!Files.isRegularFile(packageFile)) {
-                throw new BusinessException(
-                        "PACKAGE_NOT_FOUND",
-                        "插件包文件不存在：" + packageFile.getFileName()
-                );
-            }
-            Path targetRoot = installDir()
-                    .resolve(String.valueOf(userId))
-                    .resolve(game.getGameCode())
-                    .resolve(gamePackage.getVersion())
-                    .toAbsolutePath()
-                    .normalize();
+            Files.createDirectories(stagingRoot);
+            extract(packageFile, stagingRoot);
 
-            if (!targetRoot.startsWith(installDir())) {
-                throw new BusinessException("INVALID_INSTALL_PATH", "安装路径不合法");
-            }
-
-            deleteRecursively(targetRoot);
-            Files.createDirectories(targetRoot);
-
-            try (ZipInputStream zip = new ZipInputStream(
-                    Files.newInputStream(packageFile)
-            )) {
-                ZipEntry entry;
-                while ((entry = zip.getNextEntry()) != null) {
-                    Path target = targetRoot.resolve(entry.getName()).normalize();
-                    if (!target.startsWith(targetRoot)) {
-                        throw new BusinessException(
-                                "INVALID_PACKAGE",
-                                "插件包包含非法路径"
-                        );
-                    }
-                    if (entry.isDirectory()) {
-                        Files.createDirectories(target);
-                    } else {
-                        Files.createDirectories(target.getParent());
-                        Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                    zip.closeEntry();
-                }
-            }
-
-            Path manifest = targetRoot.resolve("manifest.json");
+            Path manifest = stagingRoot.resolve("manifest.json");
             if (!Files.isRegularFile(manifest)) {
                 throw new BusinessException("INVALID_PACKAGE", "插件包缺少 manifest.json");
             }
+
+            boolean hadPrevious = Files.exists(targetRoot);
+            if (hadPrevious) {
+                Files.move(targetRoot, backupRoot);
+            }
+            try {
+                Files.move(stagingRoot, targetRoot);
+            } catch (IOException ex) {
+                // 换名失败：把旧版放回去，界面与磁盘都不受影响
+                if (hadPrevious) {
+                    try {
+                        Files.move(backupRoot, targetRoot);
+                    } catch (IOException restoreEx) {
+                        log.error("恢复旧版插件目录失败：{}", targetRoot, restoreEx);
+                    }
+                }
+                throw ex;
+            }
+            if (hadPrevious) {
+                deleteQuietly(backupRoot);
+            }
         } catch (BusinessException ex) {
+            deleteQuietly(stagingRoot);
             throw ex;
         } catch (IOException ex) {
+            deleteQuietly(stagingRoot);
             throw new BusinessException("PACKAGE_INSTALL_FAILED", "插件解压失败");
         }
     }
 
+    /**
+     * 解压到指定目录，带路径穿越与体积保护。
+     */
+    private void extract(Path packageFile, Path root) throws IOException {
+        long totalBytes = 0;
+        int entryCount = 0;
+        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(packageFile))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                entryCount++;
+                if (entryCount > MAX_ENTRIES) {
+                    throw new BusinessException(
+                            "INVALID_PACKAGE",
+                            "插件包文件数量异常（超过 " + MAX_ENTRIES + " 个）"
+                    );
+                }
+                Path target = root.resolve(entry.getName()).normalize();
+                if (!target.startsWith(root)) {
+                    throw new BusinessException("INVALID_PACKAGE", "插件包包含非法路径");
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    totalBytes += Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING);
+                    if (totalBytes > MAX_UNCOMPRESSED_BYTES) {
+                        throw new BusinessException(
+                                "INVALID_PACKAGE",
+                                "插件包解压后体积异常（超过 "
+                                        + (MAX_UNCOMPRESSED_BYTES / 1024 / 1024) + " MB）"
+                        );
+                    }
+                }
+                zip.closeEntry();
+            }
+        }
+    }
+
+    /** 某个用户某个游戏某个版本的安装目录（已归一化，且保证在安装根目录内）。 */
+    private Path installedRoot(Long userId, String gameCode, String version) {
+        Path root = installDir()
+                .resolve(String.valueOf(userId))
+                .resolve(gameCode)
+                .resolve(version)
+                .toAbsolutePath()
+                .normalize();
+        if (!root.startsWith(installDir())) {
+            throw new BusinessException("INVALID_INSTALL_PATH", "安装路径不合法");
+        }
+        return root;
+    }
+
     public String readManifest(Long userId, GameProduct game, String version) {
         try {
-            Path manifest = installDir()
-                    .resolve(String.valueOf(userId))
-                    .resolve(game.getGameCode())
-                    .resolve(version)
-                    .resolve("manifest.json")
-                    .toAbsolutePath()
-                    .normalize();
-            if (!manifest.startsWith(installDir()) || !Files.isRegularFile(manifest)) {
+            Path manifest = installedRoot(userId, game.getGameCode(), version)
+                    .resolve("manifest.json");
+            if (!Files.isRegularFile(manifest)) {
                 return null;
             }
             return Files.readString(manifest, StandardCharsets.UTF_8);
@@ -193,14 +260,13 @@ public class PluginPackageService {
             String version,
             String relativePath
     ) {
-        Path file = installDir()
-                .resolve(String.valueOf(userId))
-                .resolve(gameCode)
-                .resolve(version)
-                .resolve(relativePath)
-                .toAbsolutePath()
-                .normalize();
-        if (!file.startsWith(installDir()) || !Files.isRegularFile(file)) {
+        Path root = installedRoot(userId, gameCode, version);
+        Path file = root.resolve(relativePath).toAbsolutePath().normalize();
+        // ⚠ 必须比到本游戏的版本目录 root，而不是只比安装根目录：
+        // 只比安装根目录时，`../../<其他用户>/<其他游戏>/...` 这种路径也算"在根目录内"，
+        // 能把别人的安装内容读出来。虽然 Tomcat 一般会把 `..` 归一化掉，
+        // 但这一层校验本来就是用来兜住"一般不会发生"的情况。
+        if (!file.startsWith(root) || !Files.isRegularFile(file)) {
             throw new BusinessException("PLUGIN_FILE_NOT_FOUND", "插件资源文件不存在");
         }
         return file;
@@ -232,6 +298,14 @@ public class PluginPackageService {
             return HexFormat.of().formatHex(digest.digest());
         } catch (IOException | NoSuchAlgorithmException ex) {
             throw new BusinessException("PACKAGE_HASH_FAILED", "插件包哈希计算失败");
+        }
+    }
+
+    private void deleteQuietly(Path root) {
+        try {
+            deleteRecursively(root);
+        } catch (IOException | BusinessException ex) {
+            log.warn("清理目录失败：{}", root, ex);
         }
     }
 

@@ -7,11 +7,16 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        format_sql: true
+        # 生产态把 SQL 打到 info 级、并且每条再 format 一遍多行，
+        # 日志体积会翻好几倍（开着 format_sql 时一条 INSERT 占 8~10 行）。
+        # 需要看 SQL 时用 EDUPLAY_SQL_LOG=debug 临时打开即可。
+        format_sql: ${EDUPLAY_SQL_FORMAT:false}
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      # 实测最大的游戏包已经 7.09 MB，原先 10 MB 只余 2.9 MB；
+      # 一个带 three.js 与贴图的新包轻松超 20 MB，此时上传会直接失败。
+      max-file-size: ${EDUPLAY_MAX_UPLOAD:100MB}
+      max-request-size: ${EDUPLAY_MAX_UPLOAD:100MB}
   web:
     resources:
       cache:
@@ -24,6 +29,11 @@ spring:
 
 server:
   port: 7070
+  # ⚠ 只监听回环地址。不写这一行时 Tomcat 默认绑 0.0.0.0：
+  # 同一个局域网（学校的教室网络）里任何一台机器都能打开 http://老师机IP:7070，
+  # 进而触达管理端。本平台是纯本机应用，没有任何"家里另一台设备要访问"的场景；
+  # 确实需要跨机访问时用 EDUPLAY_BIND_ADDRESS=0.0.0.0 显式打开。
+  address: ${EDUPLAY_BIND_ADDRESS:127.0.0.1}
 
 eduplay:
   version: @project.version@
@@ -33,4 +43,4 @@ eduplay:
 
 logging:
   level:
-    org.hibernate.SQL: info
+    org.hibernate.SQL: ${EDUPLAY_SQL_LOG:warn}

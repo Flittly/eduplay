@@ -11,8 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -36,17 +39,38 @@ public class ClassManagementService {
     @Transactional(readOnly = true)
     public List<ClassSummary> listClasses() {
         AppUser teacher = requireTeacher();
+        // 学生名单只查一次，再按班级名（忽略大小写）分组。
+        // 原先每个班都要单独查两次（学生 + 班委），10 个班就是 20 次查询。
+        List<Student> allStudents =
+                studentRepository.findByTeacherIdOrderByClassNameAscNameAsc(teacher.getId());
+        Map<String, List<Student>> studentsByClass = new LinkedHashMap<>();
+        for (Student student : allStudents) {
+            studentsByClass
+                    .computeIfAbsent(classKey(student.getClassName()), key -> new ArrayList<>())
+                    .add(student);
+        }
+
+        Map<String, String> monitorByClass = new HashMap<>();
         Set<String> names = new LinkedHashSet<>();
-        classRepository.findByTeacherIdOrderByClassNameAsc(teacher.getId())
-                .forEach(item -> names.add(item.getClassName()));
-        studentRepository
-                .findByTeacherIdOrderByClassNameAscNameAsc(teacher.getId())
-                .forEach(student -> names.add(student.getClassName()));
+        for (TeacherClass record : classRepository.findByTeacherIdOrderByClassNameAsc(teacher.getId())) {
+            names.add(record.getClassName());
+            monitorByClass.putIfAbsent(classKey(record.getClassName()), record.getMonitorName());
+        }
+        names.addAll(allStudents.stream().map(Student::getClassName).toList());
 
         return names.stream()
                 .sorted(Comparator.naturalOrder())
-                .map(name -> toSummary(teacher.getId(), name))
+                .map(name -> toSummary(
+                        name,
+                        studentsByClass.getOrDefault(classKey(name), List.of()),
+                        monitorByClass.get(classKey(name))
+                ))
                 .toList();
+    }
+
+    /** 班级名比较一律忽略大小写，与 IgnoreCase 查询保持同一口径。 */
+    private static String classKey(String className) {
+        return className == null ? "" : className.toLowerCase(java.util.Locale.ROOT);
     }
 
     @Transactional
@@ -73,7 +97,11 @@ public class ClassManagementService {
         );
         record.setUpdatedAt(Instant.now());
         classRepository.save(record);
-        return toSummary(teacher.getId(), normalized);
+        return toSummary(
+                normalized,
+                studentRepository.findByTeacherIdAndClassNameIgnoreCase(teacher.getId(), normalized),
+                record.getMonitorName()
+        );
     }
 
     @Transactional
@@ -85,28 +113,40 @@ public class ClassManagementService {
                         teacher.getId(),
                         normalized
                 );
-        if (students.isEmpty()) {
-            throw new NotFoundException("班级不存在或没有学生");
+        List<TeacherClass> records =
+                classRepository.findAllByTeacherIdAndClassNameIgnoreCase(
+                        teacher.getId(),
+                        normalized
+                );
+        // 只设过班委、还没加学生的班级也必须能删。
+        // 原先「students.isEmpty() 就 404」，这类班级永远删不掉，
+        // 界面上一直留着一个删不掉的空壳。
+        if (students.isEmpty() && records.isEmpty()) {
+            throw new NotFoundException("班级不存在");
         }
-        for (Student student : students) {
-            ledgerRepository.deleteByStudentId(student.getId());
+
+        if (!students.isEmpty()) {
+            // 一次性删整批流水（原先逐个 deleteByStudentId）
+            ledgerRepository.deleteByStudentIdIn(
+                    students.stream().map(Student::getId).toList()
+            );
+            // ⚠ 按实体删，不再用 deleteByTeacherIdAndClassName：
+            // 那个派生方法是**区分大小写**的，而上面查学生用的是 IgnoreCase。
+            // 班名写成 "Class 1"、记录里是 "class 1" 时，学生查得到、删不掉，
+            // 随后外键约束把整个删除打成 500。
+            studentRepository.deleteAll(students);
+            studentRepository.flush();
         }
-        studentRepository.deleteByTeacherIdAndClassName(
-                teacher.getId(),
-                normalized
-        );
-        classRepository.deleteByTeacherIdAndClassName(
-                teacher.getId(),
-                normalized
-        );
+        if (!records.isEmpty()) {
+            classRepository.deleteAll(records);
+        }
     }
 
-    private ClassSummary toSummary(Long teacherId, String className) {
-        List<Student> students =
-                studentRepository.findByTeacherIdAndClassNameIgnoreCase(
-                        teacherId,
-                        className
-                );
+    private ClassSummary toSummary(
+            String className,
+            List<Student> students,
+            String monitorName
+    ) {
         int count = students.size();
         long totalPoints = students.stream()
                 .mapToLong(Student::getTotalPoints)
@@ -121,13 +161,10 @@ public class ClassManagementService {
                 .map(Student::getName)
                 .sorted()
                 .toList();
-        TeacherClass record = classRepository
-                .findByTeacherIdAndClassNameIgnoreCase(teacherId, className)
-                .orElse(null);
         return new ClassSummary(
                 className,
                 count,
-                record == null ? null : record.getMonitorName(),
+                monitorName,
                 avgPoints,
                 count == 0 ? null : maxPoints,
                 topStudents

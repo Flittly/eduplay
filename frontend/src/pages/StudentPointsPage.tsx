@@ -152,7 +152,13 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
     try {
       await adjustStudentPoints(token, adjustTarget.id, {
         amount,
-        reason: adjustReason
+        reason: adjustReason,
+        // 每次点击生成一个唯一标识：万一超时后重试，后端认出是同一笔操作，
+        // 只会记一次账（原先后端用随机 UUID 当幂等键，重试就等于再加一次分）。
+        requestId:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`
       });
       setAdjustTarget(null);
       setAdjustAmount("");

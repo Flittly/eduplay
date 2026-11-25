@@ -48,6 +48,10 @@ public interface GamePackageRepository extends JpaRepository<GamePackage, Long> 
     @Query("select p from GamePackage p where p.gameId in :gameIds")
     List<GamePackage> findByGameIdIn(@Param("gameIds") Collection<Long> gameIds);
 
+    /** 每个游戏的包版本数，一次查完（列表页原先逐行加载全部版本只为取 size()）。 */
+    @Query("select p.gameId, count(p) from GamePackage p group by p.gameId")
+    List<Object[]> countGroupByGameId();
+
     /**
      * 按**数字段**比较版本号：{@code "2.5.10" > "2.5.9"}。
      *

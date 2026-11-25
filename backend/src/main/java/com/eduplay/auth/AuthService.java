@@ -40,6 +40,25 @@ public class AuthService {
     private final LocalSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * 用户不存在时也要跑一次的对照哈希。
+     *
+     * <p>原先「查不到用户就立刻抛异常、查到才做 BCrypt」：BCrypt 一次约 60~80 ms，
+     * 两条分支的响应时间差了一个数量级，攻击者据此就能枚举出哪些用户名存在
+     * （进而只对存在的账号撞库）。这里在启动时算一次固定口令的哈希，
+     * 走「查不到」分支时拿它做一次等价耗时的比对。
+     */
+    private final String timingDummyHash;
+
+    /**
+     * BCrypt 只使用密码的前 **72 字节**，超出部分被静默丢弃。
+     *
+     * <p>`@Size(max = 64)` 限制的是**字符**数：64 个汉字 = 192 字节，
+     * 于是「前 72 字节相同的两串密码」都能登录成功。这里按 UTF-8 字节数卡死，
+     * 与 BCrypt 的实际输入口径对齐。
+     */
+    private static final int MAX_PASSWORD_BYTES = 72;
+
     public AuthService(
             AppUserRepository userRepository,
             LocalSessionRepository sessionRepository,
@@ -48,6 +67,7 @@ public class AuthService {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.passwordEncoder = passwordEncoder;
+        this.timingDummyHash = passwordEncoder.encode("timing-equalizer-not-a-real-password");
     }
 
     @Transactional
@@ -61,6 +81,7 @@ public class AuthService {
         if (userRepository.existsByUsername(username)) {
             throw new BusinessException("USERNAME_EXISTS", "用户名已存在");
         }
+        requirePasswordFitsBcrypt(request.password());
 
         AppUser user = new AppUser();
         user.setUsername(username);
@@ -68,8 +89,11 @@ public class AuthService {
         user.setUserType("LOCAL");
         user.setRole(role);
         user.setStatus("ACTIVE");
-        user.setStudentNo(request.studentNo());
-        user.setClassName(request.className());
+        // 与其他入口（Excel 导入、手工新增）保持同一口径：
+        // 学生导入是按 trim 后的班级/学号判重的，注册这边不 trim 就会造出
+        // 「"高一1班" 与 "高一1班 "」两个视觉相同、判重不同的班级。
+        user.setStudentNo(normalizeNullable(request.studentNo()));
+        user.setClassName(normalizeNullable(request.className()));
         applyProfile(user, request.nickname(), request.phone(), request.email(),
                 request.gender(), request.birthday());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -80,11 +104,28 @@ public class AuthService {
 
     @Transactional
     public UserResponse updateProfile(UpdateProfileRequest request) {
-        AppUser user = AuthContext.requireUser();
+        // ⚠ 必须按 id 重新读一次，不能直接改 AuthContext 里的那个实例：
+        // 它来自过滤器里那次独立事务，事务一结束就 detach 了。对 detached 实体调
+        // save() 走的是 merge —— 把内存里**所有字段**写回数据库，包括那些本次没动、
+        // 但已经被别人改过的字段。典型现场：管理员刚把这个教师设成 DISABLED，
+        // 教师自己改个昵称，status 就被内存里的旧值 ACTIVE 覆盖回去了。
+        AppUser current = AuthContext.requireUser();
+        AppUser user = userRepository.findById(current.getId())
+                .orElseThrow(() -> new NotFoundException("用户不存在"));
         applyProfile(user, request.nickname(), request.phone(), request.email(),
                 request.gender(), request.birthday());
-        userRepository.save(user);
+        // 受管实体，脏检查会在提交时自动落库，无需再 save()
         return UserResponse.from(user);
+    }
+
+    private void requirePasswordFitsBcrypt(String password) {
+        if (password != null
+                && password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {
+            throw new BusinessException(
+                    "PASSWORD_TOO_LONG",
+                    "密码过长（按 UTF-8 计算不能超过 " + MAX_PASSWORD_BYTES + " 字节，约 24 个汉字）"
+            );
+        }
     }
 
     private void applyProfile(
@@ -134,10 +175,17 @@ public class AuthService {
     public LoginResult loginLocal(LoginLocalRequest request) {
         AppUser user = userRepository.findByUsername(request.username().trim())
                 .filter(item -> "LOCAL".equals(item.getUserType()))
-                .orElseThrow(() -> new BusinessException("BAD_CREDENTIALS", "用户名或密码错误"));
+                .orElse(null);
 
-        if (user.getPasswordHash() == null
-                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        // 用户不存在时也走一次同代价的 BCrypt（见 timingDummyHash），
+        // 让「用户名不存在」和「密码错误」在耗时上不可区分。
+        boolean matches = passwordEncoder.matches(
+                request.password(),
+                user == null || user.getPasswordHash() == null
+                        ? timingDummyHash
+                        : user.getPasswordHash()
+        );
+        if (user == null || user.getPasswordHash() == null || !matches) {
             throw new BusinessException("BAD_CREDENTIALS", "用户名或密码错误");
         }
         if ("DISABLED".equals(user.getStatus())) {
@@ -152,10 +200,15 @@ public class AuthService {
         AppUser user = userRepository.findByUsername(request.username().trim())
                 .filter(item -> "ADMIN".equals(item.getUserType())
                         && "SUPER_ADMIN".equals(item.getRole()))
-                .orElseThrow(() -> new BusinessException("BAD_CREDENTIALS", "用户名或密码错误"));
+                .orElse(null);
 
-        if (user.getPasswordHash() == null
-                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        boolean matches = passwordEncoder.matches(
+                request.password(),
+                user == null || user.getPasswordHash() == null
+                        ? timingDummyHash
+                        : user.getPasswordHash()
+        );
+        if (user == null || user.getPasswordHash() == null || !matches) {
             throw new BusinessException("BAD_CREDENTIALS", "用户名或密码错误");
         }
         if ("DISABLED".equals(user.getStatus())) {
@@ -188,12 +241,10 @@ public class AuthService {
         if (token == null || token.isBlank()) {
             throw new BusinessException("UNAUTHORIZED", "请先登录");
         }
-        LocalSession session = sessionRepository.findByToken(token)
-                .filter(item -> item.getExpiresAt().isAfter(Instant.now()))
+        // 一条 SQL 同时校验会话有效期并取出用户（原先分两次查：session 一次、user 一次）。
+        // 插件资源的每个文件请求都要走这里，一次开游戏 80~160 次，省掉一半查询。
+        AppUser user = sessionRepository.findUserByToken(token, Instant.now())
                 .orElseThrow(() -> new BusinessException("UNAUTHORIZED", "登录状态已失效，请重新登录"));
-
-        AppUser user = userRepository.findById(session.getUserId())
-                .orElseThrow(() -> new NotFoundException("用户不存在"));
 
         // 会话有效期之外还必须校验账号状态：token 改为永久有效后，
         // 少了这一句，被禁用的账号就永远踢不出去了。

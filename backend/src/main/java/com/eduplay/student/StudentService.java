@@ -34,6 +34,18 @@ import java.util.UUID;
 @Profile("local")
 public class StudentService {
 
+    /** 与游戏结算（GameScoreService.MAX_SCORE）、Excel 导入保持一致的积分上限。 */
+    private static final int MAX_POINTS = 99999;
+
+    /**
+     * 单次导入的行数上限。
+     *
+     * <p>不加限制时，一个「只有表头 + 第 100 万行有内容」的稀疏表会让
+     * {@code sheet.getLastRowNum()} 返回 100 万，循环空转百万次再逐行判空 ——
+     * 内存与 CPU 都白烧，最后还可能被 OOM 打断。
+     */
+    private static final int MAX_IMPORT_ROWS = 2000;
+
     private final StudentRepository studentRepository;
     private final StudentPointsLedgerRepository ledgerRepository;
     private final GameProductRepository gameProductRepository;
@@ -58,8 +70,16 @@ public class StudentService {
         Set<String> fileStudentKeys = new HashSet<>();
         List<StudentRow> validRows = new ArrayList<>();
 
+        // 一次性把该教师现有的「班级 + 学号」全取出来判重。
+        // 原先每行一次 existsByTeacherIdAndClassNameAndStudentNo：500 行 = 500 次查询，
+        // 而教师名下通常也就几百个学生，一次全取反而更便宜。
+        Set<String> existingKeys = new HashSet<>();
+        for (Object[] key : studentRepository.findClassStudentKeys(teacher.getId())) {
+            existingKeys.add(classStudentKey((String) key[0], (String) key[1]));
+        }
+
         for (StudentRow row : rows) {
-            List<String> rowErrors = validateImportRow(teacher.getId(), row, fileStudentKeys);
+            List<String> rowErrors = validateImportRow(row, fileStudentKeys, existingKeys);
             if (rowErrors.isEmpty()) {
                 validRows.add(row);
             } else {
@@ -76,19 +96,49 @@ public class StudentService {
             return new StudentImportResult(rows.size(), 0, failures.size(), failures);
         }
 
-        int success = 0;
+        // 批量插入：先一次 saveAll 拿到自增主键，再批量写初始积分流水。
+        // 原先逐行 createStudent（每行一次 saveAndFlush + 一次 ledger save），
+        // 500 行就是 1000 次往返还外加 500 次 flush。
+        List<Student> toCreate = new ArrayList<>(validRows.size());
         for (StudentRow row : validRows) {
-            createStudent(
-                    teacher.getId(),
-                    row.name(),
-                    row.studentNo(),
-                    row.className(),
-                    row.initialPoints(),
-                    "STUDENT_IMPORT"
-            );
-            success++;
+            Student student = new Student();
+            student.setTeacherId(teacher.getId());
+            student.setName(row.name().trim());
+            student.setStudentNo(row.studentNo().trim());
+            student.setClassName(normalizeClassName(row.className()));
+            student.setTotalPoints(row.initialPoints());
+            student.setVersion(0L);
+            toCreate.add(student);
         }
-        return new StudentImportResult(rows.size(), success, 0, List.of());
+        List<Student> saved = studentRepository.saveAll(toCreate);
+        studentRepository.flush();
+
+        List<StudentPointsLedger> ledgers = new ArrayList<>();
+        for (int i = 0; i < saved.size(); i++) {
+            int initialPoints = validRows.get(i).initialPoints();
+            if (initialPoints == 0) {
+                continue;
+            }
+            Student student = saved.get(i);
+            StudentPointsLedger ledger = new StudentPointsLedger();
+            ledger.setStudentId(student.getId());
+            ledger.setTeacherId(teacher.getId());
+            ledger.setChangeType("INIT");
+            ledger.setAmount(initialPoints);
+            ledger.setBalanceAfter(initialPoints);
+            ledger.setBizType("STUDENT_IMPORT");
+            ledger.setBizId("student:" + student.getId());
+            ledger.setIdempotencyKey("init:" + student.getId());
+            ledgers.add(ledger);
+        }
+        if (!ledgers.isEmpty()) {
+            ledgerRepository.saveAll(ledgers);
+        }
+        return new StudentImportResult(rows.size(), saved.size(), 0, List.of());
+    }
+
+    private static String classStudentKey(String className, String studentNo) {
+        return (className == null ? "" : className) + "::" + (studentNo == null ? "" : studentNo);
     }
 
     @Transactional(readOnly = true)
@@ -202,12 +252,19 @@ public class StudentService {
             throw new BusinessException("STUDENT_NO_EXISTS", "该班级下学号已存在");
         }
 
+        // Excel 导入那条路径校验了「初始积分 0~99999」，手工新增这条路原先一个数都不校验：
+        // 填 -5 或 1e9 都能直接落库，之后所有「班级均分」「排行榜」全被这一个值带偏。
+        int initialPoints = request.initialPoints() == null ? 0 : request.initialPoints();
+        if (initialPoints < 0 || initialPoints > MAX_POINTS) {
+            throw new BusinessException("INVALID_POINTS", "初始积分应在0到" + MAX_POINTS + "之间");
+        }
+
         Student student = createStudent(
                 teacher.getId(),
                 name,
                 studentNo,
                 className,
-                request.initialPoints() == null ? 0 : request.initialPoints(),
+                initialPoints,
                 "STUDENT_MANUAL_ADD"
         );
         return StudentResponse.from(student);
@@ -219,7 +276,9 @@ public class StudentService {
             UpdateStudentRequest request
     ) {
         AppUser teacher = requireTeacher();
-        Student student = getOwnedStudent(teacher.getId(), studentId);
+        // 加行锁：这里同样要「读旧值 → 算差额 → 写新值」，不加锁时与游戏结算并发
+        // 会互相覆盖（积分对了但流水记错，或直接乐观锁 500）。
+        Student student = getOwnedStudentForUpdate(teacher.getId(), studentId);
         String name = request.name().trim();
         String studentNo = request.studentNo().trim();
         String className = normalizeClassName(request.className());
@@ -246,8 +305,12 @@ public class StudentService {
         if (request.totalPoints() != null
                 && !request.totalPoints().equals(student.getTotalPoints())) {
             int newTotal = request.totalPoints();
-            if (newTotal < 0) {
-                throw new BusinessException("INVALID_POINTS", "积分不能小于0");
+            // 原先只判了 < 0：填 999999999 也能存进去，同样能把班级均分算歪。
+            if (newTotal < 0 || newTotal > MAX_POINTS) {
+                throw new BusinessException(
+                        "INVALID_POINTS",
+                        "积分应在0到" + MAX_POINTS + "之间"
+                );
             }
             int delta = newTotal - student.getTotalPoints();
             student.setTotalPoints(newTotal);
@@ -259,6 +322,9 @@ public class StudentService {
             ledger.setBalanceAfter(newTotal);
             ledger.setBizType("EDIT_STUDENT");
             ledger.setBizId(UUID.randomUUID().toString());
+            // 这里写的是「绝对值改成多少」，重复提交时第二次会因为
+            // `!equals(student.getTotalPoints())` 直接跳过，不会重复记账，
+            // 所以键的唯一性只需保证不与别的记录撞车即可。
             ledger.setIdempotencyKey("edit:" + student.getId() + ":" + UUID.randomUUID());
             ledgerRepository.save(ledger);
         }
@@ -281,7 +347,9 @@ public class StudentService {
             AdjustPointsRequest request
     ) {
         AppUser teacher = requireTeacher();
-        Student student = getOwnedStudent(teacher.getId(), studentId);
+        // 行锁：积分是累加语义，并发下两个请求读到同一个旧值会互相覆盖；
+        // 学生表有 @Version，覆盖不了就直接抛乐观锁异常 —— 双击「+10」必有一个 500。
+        Student student = getOwnedStudentForUpdate(teacher.getId(), studentId);
         int amount = request.amount();
 
         if (amount == 0) {
@@ -291,9 +359,27 @@ public class StudentService {
             throw new BusinessException("INVALID_POINTS", "单次积分变动应在-99999到99999之间");
         }
 
+        // 幂等键原先用 UUID.randomUUID()：每次重试都是**新键**，
+        // 唯一约束永远不会冲突，等于完全没有幂等 —— 网络超时后前端重发一次，
+        // 学生就被加了两次分。改为由前端传入本次操作的 requestId。
+        String requestKey = request.requestId() == null ? "" : request.requestId().trim();
+        String idempotencyKey = requestKey.isEmpty()
+                ? "manual:" + student.getId() + ":" + UUID.randomUUID()
+                : "manual:" + student.getId() + ":" + requestKey;
+        if (!requestKey.isEmpty() && ledgerRepository.existsByIdempotencyKey(idempotencyKey)) {
+            // 同一笔操作已经记过账：直接回当前余额，不再加一次
+            return StudentPointsResponse.from(student);
+        }
+
         int balanceAfter = student.getTotalPoints() + amount;
         if (balanceAfter < 0) {
             throw new BusinessException("POINTS_NOT_ENOUGH", "扣减后积分不能小于0");
+        }
+        if (balanceAfter > MAX_POINTS) {
+            throw new BusinessException(
+                    "INVALID_POINTS",
+                    "调整后积分不能超过" + MAX_POINTS
+            );
         }
 
         student.setTotalPoints(balanceAfter);
@@ -309,7 +395,7 @@ public class StudentService {
                 ? "MANUAL_ADJUST"
                 : request.reason().trim());
         ledger.setBizId(UUID.randomUUID().toString());
-        ledger.setIdempotencyKey("manual:" + student.getId() + ":" + UUID.randomUUID());
+        ledger.setIdempotencyKey(idempotencyKey);
         ledgerRepository.save(ledger);
 
         return StudentPointsResponse.from(student);
@@ -334,18 +420,24 @@ public class StudentService {
     }
 
     /**
-     * 批量把流水里出现的 gameCode 映射成游戏名称（含手动导入的游戏），
-     * 避免逐条查询；未登记的 gameCode 返回 null，前端做兜底展示。
+     * 批量把流水里出现的 gameCode 映射成游戏名称（含手动导入的游戏）。
+     * 未登记的 gameCode 返回 null，前端做兜底展示。
      */
     private Map<String, String> buildGameNameMap(List<StudentPointsLedger> ledgers) {
-        Map<String, String> result = new LinkedHashMap<>();
-        ledgers.stream()
+        List<String> codes = ledgers.stream()
                 .map(StudentPointsLedger::getGameCode)
                 .filter(code -> code != null && !code.isBlank())
                 .distinct()
-                .forEach(code -> gameProductRepository.findByGameCode(code)
-                        .map(GameProduct::getName)
-                        .ifPresent(name -> result.put(code, name)));
+                .toList();
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        // 原先每个 code 单独 findByGameCode 一次（注释却写着"避免逐条查询"）。
+        // 一个学生的流水里往往有十几个不同游戏，这里一次 IN 查询取完。
+        Map<String, String> result = new LinkedHashMap<>();
+        for (GameProduct product : gameProductRepository.findByGameCodeIn(codes)) {
+            result.put(product.getGameCode(), product.getName());
+        }
         return result;
     }
 
@@ -403,9 +495,9 @@ public class StudentService {
     }
 
     private List<String> validateImportRow(
-            Long teacherId,
             StudentRow row,
-            Set<String> fileStudentKeys
+            Set<String> fileStudentKeys,
+            Set<String> existingKeys
     ) {
         List<String> errors = new ArrayList<>();
         String name = row.name() == null ? "" : row.name().trim();
@@ -421,15 +513,11 @@ public class StudentService {
             if (studentNo.length() > 64) {
                 errors.add("学号不能超过64位");
             }
-            String classStudentKey = className + "::" + studentNo;
-            if (!fileStudentKeys.add(classStudentKey)) {
+            String key = classStudentKey(className, studentNo);
+            if (!fileStudentKeys.add(key)) {
                 errors.add("同一班级内学号重复");
             }
-            if (studentRepository.existsByTeacherIdAndClassNameAndStudentNo(
-                    teacherId,
-                    className,
-                    studentNo
-            )) {
+            if (existingKeys.contains(key)) {
                 errors.add("该班级下学号已存在");
             }
         }
@@ -472,7 +560,14 @@ public class StudentService {
             }
 
             List<StudentRow> rows = new ArrayList<>();
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            int lastRow = sheet.getLastRowNum();
+            if (lastRow > MAX_IMPORT_ROWS) {
+                throw new BusinessException(
+                        "TOO_MANY_ROWS",
+                        "单次最多导入 " + MAX_IMPORT_ROWS + " 行，当前表格有 " + lastRow + " 行"
+                );
+            }
+            for (int rowIndex = 1; rowIndex <= lastRow; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null || isBlankRow(row, formatter)) {
                     continue;
@@ -534,16 +629,39 @@ public class StudentService {
         return true;
     }
 
+    /**
+     * 解析单元格里的整数。
+     *
+     * <p>原先是裸 {@code Integer.parseInt}：表格里写 {@code 1.5}、
+     * {@code 1,000}、{@code 10 分} 都会抛异常，而异常一路冒到最外层 ——
+     * **整批导入失败**，用户只看到「第 5 行初始积分不是有效整数」，
+     * 前面 4 行也一起白导了。这里改成尽量理解人的写法：去掉千分位与空白，
+     * 小数部分为 0 时按整数取，其余才算错。
+     */
     private int parseInt(String text, int rowNumber) {
         if (text == null || text.isBlank()) {
             return 0;
         }
+        String cleaned = text.trim()
+                .replace(",", "")
+                .replace("，", "")
+                .replace(" ", "")
+                .replace("分", "");
         try {
-            return Integer.parseInt(text.trim());
-        } catch (NumberFormatException ex) {
+            return Integer.parseInt(cleaned);
+        } catch (NumberFormatException ignored) {
+            // 继续尝试按小数解析
+        }
+        try {
+            java.math.BigDecimal value = new java.math.BigDecimal(cleaned);
+            if (value.stripTrailingZeros().scale() > 0) {
+                throw new ArithmeticException("not an integer");
+            }
+            return value.intValueExact();
+        } catch (RuntimeException ex) {
             throw new BusinessException(
                     "INVALID_POINTS",
-                    "第" + rowNumber + "行初始积分不是有效整数"
+                    "第" + rowNumber + "行初始积分不是有效整数（当前值：" + text.trim() + "）"
             );
         }
     }
@@ -558,6 +676,12 @@ public class StudentService {
 
     private Student getOwnedStudent(Long teacherId, Long studentId) {
         return studentRepository.findByIdAndTeacherId(studentId, teacherId)
+                .orElseThrow(() -> new NotFoundException("学生不存在或不属于当前教师"));
+    }
+
+    /** 加行锁版本，用于所有「读积分 → 计算 → 写回」的场景。 */
+    private Student getOwnedStudentForUpdate(Long teacherId, Long studentId) {
+        return studentRepository.findForUpdateByIdAndTeacherId(studentId, teacherId)
                 .orElseThrow(() -> new NotFoundException("学生不存在或不属于当前教师"));
     }
 
@@ -604,7 +728,12 @@ public class StudentService {
 
     public record AdjustPointsRequest(
             int amount,
-            String reason
+            String reason,
+            /**
+             * 本次操作的客户端唯一标识（前端每次点击生成一个 UUID）。
+             * 重试时带上同一个值即可保证只加一次分；不带则退化为「每次都记一笔」。
+             */
+            String requestId
     ) {
     }
 

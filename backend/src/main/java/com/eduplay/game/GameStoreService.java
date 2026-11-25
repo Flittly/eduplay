@@ -13,6 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,20 @@ import org.springframework.context.annotation.Profile;
 @Service
 @Profile("local")
 public class GameStoreService {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(GameStoreService.class);
+
+    /**
+     * 封面缓存：key = gameCode + 版本 + 包哈希。
+     *
+     * <p>封面是「打开 zip → 解析 manifest.json → 再取一个 entry」算出来的，
+     * 商城页一次要渲染 17 个游戏 = 17 次开 zip。带上包哈希做 key，
+     * 重新上传同一版本的新包时 key 自然变化，不需要手动失效。
+     */
+    private final Map<String, CoverFile> coverCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final int COVER_CACHE_LIMIT = 200;
 
     private final GameProductRepository gameProductRepository;
     private final UserGameInstallRepository installRepository;
@@ -191,15 +206,19 @@ public class GameStoreService {
         GameProduct game = gameProductRepository.findByGameCode(code.getGameCode())
                 .orElseThrow(() -> new BusinessException("GAME_NOT_FOUND", "激活码对应游戏不存在"));
 
-        entitlementRepository.findByUserIdAndGameId(teacher.getId(), game.getId())
-                .ifPresent(existing -> {
-                    if ("ACTIVE".equals(existing.getStatus())) {
-                        throw new BusinessException(
-                                "ALREADY_OWNED",
-                                "你已经拥有该游戏，无需重复兑换"
-                        );
-                    }
-                });
+        // 注意这里**不能只判 ACTIVE 就放行**：权益表有唯一键 (user_id, game_id)，
+        // 若已存在一行状态是 REVOKED/EXPIRED 的历史记录，下面再 insert 一条新行
+        // 必然撞唯一键 —— DataIntegrityViolation 一路冒到兜底，用户看到 500
+        // （而且旧版还会把提示译成"字段超长"）。正确做法是把那一行**复用**成 ACTIVE。
+        UserEntitlement existing = entitlementRepository
+                .findByUserIdAndGameId(teacher.getId(), game.getId())
+                .orElse(null);
+        if (existing != null && "ACTIVE".equals(existing.getStatus())) {
+            throw new BusinessException(
+                    "ALREADY_OWNED",
+                    "你已经拥有该游戏，无需重复兑换"
+            );
+        }
 
         // 原子占用激活码：并发下只有一个请求能把 UNUSED 翻成 USED，
         // 另一个影响行数为 0，据此判定"已被使用"。原来的
@@ -213,7 +232,7 @@ public class GameStoreService {
             throw new BusinessException("CODE_ALREADY_USED", "激活码已被使用");
         }
 
-        UserEntitlement entitlement = new UserEntitlement();
+        UserEntitlement entitlement = existing == null ? new UserEntitlement() : existing;
         entitlement.setUserId(teacherId);
         entitlement.setGameId(gameId);
         entitlement.setSource("ACTIVATION_CODE");
@@ -265,9 +284,28 @@ public class GameStoreService {
         if (file.isEmpty()) {
             throw new BusinessException("EMPTY_FILE", "请选择插件包文件");
         }
-
         try {
-            byte[] bytes = file.getBytes();
+            return doInstallDownloadedPackage(teacher, gameCode, file.getBytes());
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (IOException ex) {
+            throw new BusinessException("PACKAGE_READ_FAILED", "插件包读取失败");
+        }
+    }
+
+    /**
+     * 已读进内存的包体直接安装。
+     *
+     * <p>导入流程本来就要先读一遍解析 manifest 才能知道 gameCode，
+     * 传字节进来可以避免对同一个 MultipartFile 再 {@code getBytes()} 一次、
+     * 再开一次 zip —— 20 MB 的包会因此多占 20 MB 堆和一次全量解压扫描。
+     */
+    private StoreGameResponse doInstallDownloadedPackage(
+            AppUser teacher,
+            String gameCode,
+            byte[] bytes
+    ) {
+        try {
             PluginManifest manifest = readManifest(bytes, gameCode);
             String packageName = sanitize(gameCode) + "-"
                     + sanitizeVersion(manifest.version()) + ".zip";
@@ -277,9 +315,9 @@ public class GameStoreService {
             try {
                 GameProduct product = gameProductRepository.findByGameCode(gameCode)
                         .orElseGet(GameProduct::new);
-                if (product.getId() == null) {
+                boolean isNew = product.getId() == null;
+                if (isNew) {
                     product.setGameCode(gameCode);
-                    product.setStatus("ACTIVE");
                 }
                 product.setName(manifest.name());
                 if (manifest.description() != null) {
@@ -291,7 +329,12 @@ public class GameStoreService {
                     product.setCoverUrl("/api/v1/store/games/" + gameCode + "/cover");
                 }
                 product.setPriceCents(product.getPriceCents() == null ? 0 : product.getPriceCents());
-                product.setStatus("ACTIVE");
+                // ⚠ 只在**新建**时给 ACTIVE。原先这里无条件 setStatus("ACTIVE")：
+                // 管理端把某个游戏设成 DRAFT（下架待审），教师端导一次包就把它重新上架了，
+                // 状态机被业务侧绕过。
+                if (isNew) {
+                    product.setStatus("ACTIVE");
+                }
                 gameProductRepository.saveAndFlush(product);
                 syncManifestTags(product, manifest.tags());
 
@@ -345,30 +388,49 @@ public class GameStoreService {
         if (file.isEmpty()) {
             throw new BusinessException("EMPTY_FILE", "请选择插件包文件");
         }
+        // 只读一次字节：原先先 getBytes() 解析 manifest，再把 file 传下去让下游
+        // 又 getBytes() 一次、又解一遍 zip —— 大包会白白多占一份堆内存。
+        byte[] bytes;
         try {
-            PluginManifest manifest = readManifest(file.getBytes());
-            return installDownloadedPackage(
-                    manifest.gameCode(),
-                    file
-            );
+            bytes = file.getBytes();
         } catch (IOException ex) {
             throw new BusinessException("PACKAGE_READ_FAILED", "插件包读取失败");
         }
+        PluginManifest manifest;
+        try {
+            manifest = readManifest(bytes);
+        } catch (IOException ex) {
+            throw new BusinessException("PACKAGE_READ_FAILED", "插件包读取失败");
+        }
+        return doInstallDownloadedPackage(teacher, manifest.gameCode(), bytes);
     }
 
     @Transactional
     public void uninstallGame(String gameCode) {
         AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
-        pluginPackageService.uninstall(teacher.getId(), gameCode);
+        // 先删库、再删盘：反过来的话，文件删了但事务回滚（或删库失败），
+        // 库里还是"已安装"，界面上游戏照常显示，点进去全是 404。
+        // 这个顺序最坏只会留下一个没人引用的空目录，不影响任何界面状态。
         installRepository.findByUserIdAndGameId(teacher.getId(), game.getId())
                 .ifPresent(installRepository::delete);
+        installRepository.flush();
+        try {
+            pluginPackageService.uninstall(teacher.getId(), gameCode);
+        } catch (BusinessException ex) {
+            // 磁盘删不掉不该让"卸载"整体失败：库里的记录已经清掉了，
+            // 下次安装会覆盖同一个目录。
+            log.warn("卸载时清理安装目录失败：{} {}", gameCode, ex.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
     public byte[] downloadPackage(String gameCode) {
         AppUser teacher = requireTeacher();
         GameProduct game = getGame(gameCode);
+        // 不校验就下载 = 任何教师都能把任意付费包拉走（含未兑换、未购买的）。
+        // 安装那一步本来就要求 ACTIVE 权益，这里保持一致。
+        ensureEntitlement(teacher.getId(), game);
         GamePackage gamePackage = packageRepository.findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
         try {
@@ -388,15 +450,31 @@ public class GameStoreService {
         GamePackage gamePackage = packageRepository
                 .findLatestByGameId(game.getId())
                 .orElseThrow(() -> new BusinessException("PACKAGE_NOT_FOUND", "插件包不存在"));
+        String cacheKey = gameCode + ":" + gamePackage.getVersion() + ":" + gamePackage.getSha256();
+        CoverFile cached = coverCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        CoverFile cover = readCoverFromPackage(gamePackage);
+        if (coverCache.size() >= COVER_CACHE_LIMIT) {
+            coverCache.clear();
+        }
+        coverCache.put(cacheKey, cover);
+        return cover;
+    }
+
+    private CoverFile readCoverFromPackage(GamePackage gamePackage) {
         try (ZipFile zipFile = new ZipFile(
                 pluginPackageService.resolvePackage(gamePackage).toFile())) {
             String coverPath = null;
             ZipEntry manifestEntry = zipFile.getEntry("manifest.json");
             if (manifestEntry != null) {
-                String content = new String(
-                        zipFile.getInputStream(manifestEntry).readAllBytes(),
-                        StandardCharsets.UTF_8
-                );
+                String content;
+                // 显式关流：ZipFile 只保证自己关闭时收尾，读 entry 的流
+                // 在请求量大、包被替换时可能长时间挂着不放
+                try (InputStream in = zipFile.getInputStream(manifestEntry)) {
+                    content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                }
                 String cover = jsonMapper.readTree(content).path("cover").asText(null);
                 if (cover != null && !cover.isBlank()) {
                     coverPath = cover;
@@ -416,7 +494,10 @@ public class GameStoreService {
             if (entry == null) {
                 throw new BusinessException("COVER_NOT_FOUND", "插件包内没有封面文件");
             }
-            byte[] bytes = zipFile.getInputStream(entry).readAllBytes();
+            byte[] bytes;
+            try (InputStream in = zipFile.getInputStream(entry)) {
+                bytes = in.readAllBytes();
+            }
             String name = entry.getName().toLowerCase(Locale.ROOT);
             String contentType = name.endsWith(".png") ? "image/png"
                     : name.endsWith(".jpg") || name.endsWith(".jpeg") ? "image/jpeg"
@@ -613,6 +694,9 @@ public class GameStoreService {
                 "topics", "TOPIC",
                 "other", "OTHER"
         );
+        // 排序号基数只查一次：原先每遇到一个新标签就 tagRepository.count() 一次，
+        // 一个包带 12 个新标签就是 12 次全表 count（而且每次都得到同一个数）。
+        int[] nextSortOrder = {(int) tagRepository.count()};
         mapping.forEach((key, category) -> {
             JsonNode values = tagsNode.path(key);
             if (!values.isArray()) {
@@ -631,7 +715,7 @@ public class GameStoreService {
                     created.setCode(code);
                     created.setName(name);
                     created.setStatus("ACTIVE");
-                    created.setSortOrder((int) tagRepository.count());
+                    created.setSortOrder(nextSortOrder[0]++);
                     created.setCreatedAt(Instant.now());
                     return tagRepository.save(created);
                 });

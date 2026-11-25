@@ -1,6 +1,7 @@
 package com.eduplay.student;
 
 import com.eduplay.common.ApiResponse;
+import com.eduplay.common.BusinessException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -98,7 +99,11 @@ public class StudentController {
             @Valid @RequestBody AdjustPointsRequest request
     ) {
         StudentService.AdjustPointsRequest serviceRequest =
-                new StudentService.AdjustPointsRequest(request.amount(), request.reason());
+                new StudentService.AdjustPointsRequest(
+                        request.amount(),
+                        request.reason(),
+                        request.requestId()
+                );
         return ApiResponse.ok(studentService.adjustPoints(
                 studentId,
                 serviceRequest
@@ -120,8 +125,13 @@ public class StudentController {
     }
 
     @GetMapping("/import/template")
-    public ResponseEntity<byte[]> downloadTemplate() throws IOException {
-        byte[] template = studentService.createImportTemplate();
+    public ResponseEntity<byte[]> downloadTemplate() {
+        byte[] template;
+        try {
+            template = studentService.createImportTemplate();
+        } catch (IOException ex) {
+            throw new BusinessException("TEMPLATE_FAILED", "生成导入模板失败，请稍后重试");
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -139,11 +149,15 @@ public class StudentController {
     public ResponseEntity<byte[]> exportStudents(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "className", required = false) String className
-    ) throws IOException {
-        byte[] workbook = studentService.createExportWorkbook(
-                keyword,
-                className
-        );
+    ) {
+        byte[] workbook;
+        try {
+            workbook = studentService.createExportWorkbook(keyword, className);
+        } catch (IOException ex) {
+            // POI 写内存流失败极少见，但抛 IOException 出去会落进兜底 → 500
+            // 「服务器内部错误」。这里换成一条能看懂的业务错误。
+            throw new BusinessException("EXPORT_FAILED", "生成 Excel 失败，请稍后重试");
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -173,7 +187,9 @@ public class StudentController {
     public record AdjustPointsRequest(
             int amount,
             @Size(max = 64, message = "原因不能超过64位")
-            String reason
+            String reason,
+            @Size(max = 64, message = "请求标识不能超过64位")
+            String requestId
     ) {
     }
 

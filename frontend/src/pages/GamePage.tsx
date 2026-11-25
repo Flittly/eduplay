@@ -2,6 +2,7 @@ import { Maximize2, Minimize2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  createPlayTicket,
   getInstalledManifest,
   listInstalledGames,
   listStudentClasses,
@@ -112,6 +113,10 @@ export default function GamePage({ token }: GamePageProps) {
   const [pickMode, setPickMode] = useState<"manual" | "random">("manual");
   const [randomCount, setRandomCount] = useState(1);
   const [started, setStarted] = useState(false);
+  const [starting, setStarting] = useState(false);
+  // 进入游戏用的短期票据（见后端 PluginPlayTicketService）：
+  // 只有它能出现在 iframe 的 URL 里，主登录 token 不再进入任何 URL。
+  const [playTicket, setPlayTicket] = useState<string | null>(null);
   const [sessionDone, setSessionDone] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [roundLogs, setRoundLogs] = useState<LoggedRound[]>([]);
@@ -479,11 +484,36 @@ export default function GamePage({ token }: GamePageProps) {
     setSelectedStudentIds([]);
   }
 
-  function handleStart() {
+  async function requestPlayTicket(): Promise<boolean> {
+    if (!installedGame) {
+      return false;
+    }
+    try {
+      const issued = await createPlayTicket(
+        token,
+        gameCode,
+        installedGame.installedVersion
+      );
+      setPlayTicket(issued.ticket);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "获取游戏访问凭证失败");
+      return false;
+    }
+  }
+
+  async function handleStart() {
     setError("");
     setSessionDone(false);
     setRoundLogs([]);
-    setStarted(true);
+    setStarting(true);
+    try {
+      if (await requestPlayTicket()) {
+        setStarted(true);
+      }
+    } finally {
+      setStarting(false);
+    }
   }
 
   function backToLauncher() {
@@ -501,15 +531,17 @@ export default function GamePage({ token }: GamePageProps) {
    * 为什么走「重挂载」而不是在游戏内部调 location.reload()：
    * 游戏卡住时它自己那段 JS 很可能已经跑不动了，只有平台侧把它整个换掉才救得回来。
    */
-  function reloadGame() {
+  async function reloadGame() {
     setError("");
+    // 票据有有效期：重开前顺手换一张，避免「电脑睡了一夜后再重开」拿到过期票据。
+    await requestPlayTicket();
     setReloadNonce((current) => current + 1);
   }
 
   const entry = manifest?.entry?.replace(/^\/+/, "") ?? "";
   const playUrl =
-    started && installedGame && entry
-      ? `/api/v1/plugin/${encodeURIComponent(token)}/${encodeURIComponent(gameCode)}/${encodeURIComponent(installedGame.installedVersion)}/${entry}`
+    started && playTicket && installedGame && entry
+      ? `/api/v1/plugin/${encodeURIComponent(playTicket)}/${encodeURIComponent(gameCode)}/${encodeURIComponent(installedGame.installedVersion)}/${entry}`
       : null;
 
   function formatTime(value: number | null): string {
@@ -835,10 +867,10 @@ export default function GamePage({ token }: GamePageProps) {
           <button
             className="primary"
             type="button"
-            disabled={selectedStudentIds.length === 0}
+            disabled={selectedStudentIds.length === 0 || starting}
             onClick={handleStart}
           >
-            开始游戏（{selectedStudentIds.length} 人）
+            {starting ? "正在准备游戏..." : `开始游戏（${selectedStudentIds.length} 人）`}
           </button>
         </section>
       )}

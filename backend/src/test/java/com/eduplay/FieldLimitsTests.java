@@ -84,13 +84,16 @@ class FieldLimitsTests {
     }
 
     @Test
-    void 认不出的约束冲突也不再说服务器内部错误() {
+    void 唯一键冲突要说清是重复而不是字段超长() {
         ResponseEntity<ApiResponse<Void>> response = handle(
                 "Unique index or primary key violation: \"PRIMARY_KEY_8 ON PUBLIC.APP_USER(USERNAME)\"");
 
-        assertEquals(400, response.getStatusCode().value());
-        assertEquals("DATA_INTEGRITY_VIOLATION", response.getBody().code());
-        assertTrue(response.getBody().message().contains("唯一约束"));
+        // 唯一键冲突与「列超长」是两种完全不同的原因，必须分开：
+        // 之前两者都落成 400 + 同一句话，用户看到"请缩短字段内容"，
+        // 而实际问题是他要兑换的激活码已经被用过、或者权益行已经存在。
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals("DATA_CONFLICT", response.getBody().code());
+        assertTrue(response.getBody().message().contains("冲突"));
     }
 
     private static ResponseEntity<ApiResponse<Void>> handle(String causeMessage) {

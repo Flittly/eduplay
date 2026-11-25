@@ -299,7 +299,7 @@ export function deleteStudent(token: string, studentId: number): Promise<void> {
 export function adjustStudentPoints(
   token: string,
   studentId: number,
-  payload: { amount: number; reason?: string }
+  payload: { amount: number; reason?: string; requestId?: string }
 ): Promise<StudentPointsResponse> {
   return request<StudentPointsResponse>(`/students/${studentId}/points`, {
     method: "POST",
@@ -308,6 +308,29 @@ export function adjustStudentPoints(
     },
     body: JSON.stringify(payload)
   });
+}
+
+/**
+ * 取一张「进入某个游戏」的短期访问票据。
+ *
+ * 游戏 iframe 带不了 Authorization 头，原先只能把主登录 token 拼进 URL；
+ * 现在改成先换一张只对这一个游戏、这一个版本有效、8 小时过期的票据。
+ * 票据即使泄漏，也拿不到任何接口权限。
+ */
+export function createPlayTicket(
+  token: string,
+  gameCode: string,
+  version: string
+): Promise<{ ticket: string; expiresAt: string }> {
+  return request<{ ticket: string; expiresAt: string }>(
+    `/play-ticket/${encodeURIComponent(gameCode)}/${encodeURIComponent(version)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
 }
 
 export function getStudentPoints(

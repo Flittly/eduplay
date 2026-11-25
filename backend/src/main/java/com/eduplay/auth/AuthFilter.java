@@ -121,7 +121,13 @@ public class AuthFilter extends OncePerRequestFilter {
             user = authService.requireUserByToken(token);
         } catch (BusinessException | NotFoundException ex) {
             log.warn("拒绝未认证请求 {} {}：{}", request.getMethod(), requestPath(request), ex.getMessage());
-            writeJson(response, HttpServletResponse.SC_UNAUTHORIZED, "UNAUTHORIZED", "登录状态已失效，请重新登录");
+            // 保留原始错误码与原因：原先一律改写成「登录状态已失效，请重新登录」，
+            // 被管理员禁用的账号因此永远只看到「请重新登录」，反复登录也进不去，
+            // 却不知道真正原因。状态码仍用 401（会话不可继续使用，前端据此清凭证）。
+            String code = ex instanceof BusinessException business
+                    ? business.getCode()
+                    : "NOT_FOUND";
+            writeJson(response, HttpServletResponse.SC_UNAUTHORIZED, code, ex.getMessage());
             return;
         }
 
@@ -175,7 +181,38 @@ public class AuthFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write(
-                "{\"success\":false,\"code\":\"" + code + "\",\"message\":\"" + message + "\",\"data\":null}"
+                "{\"success\":false,\"code\":\"" + escape(code)
+                        + "\",\"message\":\"" + escape(message) + "\",\"data\":null}"
         );
+    }
+
+    /**
+     * 手写 JSON 必须转义：目前 code 是常量、message 也来自常量，但
+     * message 迟早会带上用户输入（例如"用户名 xxx 不存在"），
+     * 一个引号就能把响应体拆坏，前端只会报「服务无响应」。
+     */
+    private static String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(value.length() + 16);
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 }
