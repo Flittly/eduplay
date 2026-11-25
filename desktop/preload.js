@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("eduplayDesktop", {
-  version: process.env.npm_package_version ?? "1.5.2",
+  version: process.env.npm_package_version ?? "1.5.3",
   platform: process.platform,
   // 悬浮球 logo 的 data: URL（logo 在 app.asar 之外的 resources/ 里，
   // 由主进程读文件转 base64，避免 file:// 的 origin/CSP 不确定性）
