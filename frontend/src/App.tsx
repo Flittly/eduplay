@@ -15,7 +15,7 @@ import StudentRosterPage from "./pages/StudentRosterPage";
 import ToolboxPage from "./pages/ToolboxPage";
 import SettingsPage from "./pages/SettingsPage";
 import { LanguageProvider } from "./i18n";
-import { getCurrentUser, logout } from "./api";
+import { ApiError, getCurrentUser, logout } from "./api";
 import type { User } from "./types";
 
 const USER_STORAGE_KEY = "eduplay.user";
@@ -48,7 +48,15 @@ export default function App() {
         setUser(currentUser);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
       })
-      .catch(() => {
+      .catch((err) => {
+        // 只有后端明确回答「令牌无效」才清凭证。
+        // 后端没起来、局域网抖动、代理 502 时保留登录态 —— 否则老师
+        // 一开电脑（服务还在启动中）就被踢回登录页，还得重输密码。
+        const rejected =
+          err instanceof ApiError && (err.status === 401 || err.status === 403);
+        if (!rejected) {
+          return;
+        }
         setUser(null);
         setToken(null);
         localStorage.removeItem(USER_STORAGE_KEY);

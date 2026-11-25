@@ -19,30 +19,69 @@ import type {
 const BASE_URL = "/api/v1";
 const CLOUD_BASE_URL = "/cloud-api/api/v1";
 
+/** JSON 接口的默认超时。后端卡死时不能让界面永远转圈。 */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * 带 HTTP 状态码的接口错误。
+ * 调用方需要区分「令牌失效（401/403）」和「后端没起来 / 网络抖动」——
+ * 前者该清登录态，后者不该。所以状态码必须带出来，不能只留 message。
+ */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(
   path: string,
   options?: RequestInit,
   baseUrl: string = BASE_URL
 ): Promise<T> {
   const isFormData = options?.body instanceof FormData;
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(options?.headers ?? {})
+  // 上传插件包这类 FormData 请求不设默认超时：学校机器上几十 MB 的包
+  // 传几十秒很正常，超时重试反而会让老师以为安装失败。
+  const withTimeout = !isFormData && !options?.signal;
+  const controller = withTimeout ? new AbortController() : null;
+  const timer = controller
+    ? window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+    : null;
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      signal: controller?.signal ?? options?.signal,
+      headers: {
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(options?.headers ?? {})
+      }
+    });
+  } catch (err) {
+    if (controller?.signal.aborted) {
+      throw new ApiError("请求超时，请检查后端服务是否正常", 0);
     }
-  });
+    throw err;
+  } finally {
+    if (timer !== null) {
+      window.clearTimeout(timer);
+    }
+  }
 
   let body: ApiResponse<T>;
   try {
     body = (await response.json()) as ApiResponse<T>;
   } catch {
     // 响应体为空或非 JSON：多为服务未启动、代理目标不可达
-    throw new Error("服务无响应，请确认后端服务已启动");
+    throw new ApiError("服务无响应，请确认后端服务已启动", response.status);
   }
 
   if (!response.ok || !body.success) {
-    throw new Error(body.message || "请求失败");
+    throw new ApiError(body.message || "请求失败", response.status);
   }
 
   return body.data;
@@ -200,7 +239,9 @@ export async function exportStudentsFile(
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  // 不能在 click() 后立刻 revoke：Firefox / Safari 会在下载真正开始前
+  // 就丢掉 blob，表现是「点了导出，什么都没发生」。延后回收。
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 export function addStudent(

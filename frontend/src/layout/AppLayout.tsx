@@ -106,9 +106,14 @@ export default function AppLayout({
               title="点击查看和编辑个人资料"
               onClick={() => setProfileOpen(true)}
             >
-              <div className="avatar">{user.nickname.slice(0, 1)}</div>
+              {/* 首屏用的是 localStorage 里的 user 缓存，可能是旧版本写下的、
+                  缺字段的对象；直接 .slice 会抛异常导致整页白屏，
+                  而且白屏后连「退出登录」都点不到。 */}
+              <div className="avatar">
+                {(user.nickname || user.username || "?").slice(0, 1)}
+              </div>
               <div className="user-meta">
-                <strong>{user.nickname}</strong>
+                <strong>{user.nickname || user.username}</strong>
                 <span>
                   {user.role === "TEACHER"
                     ? t("role.teacher")

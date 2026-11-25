@@ -32,25 +32,41 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
   const [newName, setNewName] = useState("");
   const [newStudentNo, setNewStudentNo] = useState("");
   const [newClassName, setNewClassName] = useState("");
-  const [newPoints, setNewPoints] = useState(0);
+  const [newPoints, setNewPoints] = useState("0");
   const [editTarget, setEditTarget] = useState<Student | null>(null);
   const [editName, setEditName] = useState("");
   const [editStudentNo, setEditStudentNo] = useState("");
   const [editClassName, setEditClassName] = useState("");
-  const [editPoints, setEditPoints] = useState(0);
+  // 编辑态的积分必须是字符串：用 number 时 `Number("") === 0`，
+  // 老师按一次 Backspace 清空输入框就等于「把积分改成 0」，一保存就静默扣光。
+  const [editPoints, setEditPoints] = useState("");
+  // 请求序号：切班级/搜索会并发多个请求，只认最后发出的那个，
+  // 否则先发后到的旧响应会覆盖新班级的名单。
+  const requestSeqRef = useRef(0);
 
   async function reload() {
+    const seq = requestSeqRef.current + 1;
+    requestSeqRef.current = seq;
     setLoading(true);
     try {
       const result =
         selectedClass === "ALL"
           ? await listStudents(token)
           : await listStudents(token, { className: selectedClass });
+      if (seq !== requestSeqRef.current) {
+        return;
+      }
       setStudents(result);
+      setError("");
     } catch (err) {
+      if (seq !== requestSeqRef.current) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "加载学生名单失败");
     } finally {
-      setLoading(false);
+      if (seq === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -97,17 +113,23 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
 
   async function handleAddStudent() {
     setError("");
+    const initialPoints =
+      newPoints.trim() === "" ? 0 : Number(newPoints);
+    if (!Number.isInteger(initialPoints) || initialPoints < 0) {
+      setError("初始积分必须是不小于 0 的整数");
+      return;
+    }
     try {
       await addStudent(token, {
         name: newName,
         studentNo: newStudentNo,
         className: newClassName,
-        initialPoints: newPoints
+        initialPoints
       });
       setNewName("");
       setNewStudentNo("");
       setNewClassName("");
-      setNewPoints(0);
+      setNewPoints("0");
       await reloadClasses();
       await reload();
     } catch (err) {
@@ -133,19 +155,40 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
     setEditName(student.name);
     setEditStudentNo(student.studentNo);
     setEditClassName(student.className ?? "");
-    setEditPoints(student.totalPoints);
+    setEditPoints(String(student.totalPoints));
   }
 
   async function handleUpdateStudent() {
     if (!editTarget) {
       return;
     }
+    if (editPoints.trim() === "") {
+      setError("积分不能为空；如需清零请明确填写 0");
+      return;
+    }
+    const totalPoints = Number(editPoints);
+    if (!Number.isInteger(totalPoints) || totalPoints < 0) {
+      setError("积分必须是不小于 0 的整数");
+      return;
+    }
+    // 把「原有积分改成 0」当成高危操作再确认一次：这条记录会被后端
+    // 记成一笔 MANUAL_DEDUCT 流水，事后很难分辨是误触还是真的清零。
+    if (
+      totalPoints === 0 &&
+      editTarget.totalPoints !== 0 &&
+      !window.confirm(
+        `确定把 ${editTarget.name} 的积分从 ${editTarget.totalPoints} 清零吗？`
+      )
+    ) {
+      return;
+    }
+    setError("");
     try {
       await updateStudent(token, editTarget.id, {
         name: editName,
         studentNo: editStudentNo,
         className: editClassName,
-        totalPoints: editPoints
+        totalPoints
       });
       setEditTarget(null);
       await reloadClasses();
@@ -252,8 +295,9 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
           />
           <input
             type="number"
+            min={0}
             value={newPoints}
-            onChange={(event) => setNewPoints(Number(event.target.value))}
+            onChange={(event) => setNewPoints(event.target.value)}
             placeholder="初始积分"
           />
           <button className="primary" onClick={handleAddStudent}>
@@ -343,8 +387,9 @@ export default function StudentRosterPage({ token }: StudentRosterPageProps) {
               积分
               <input
                 type="number"
+                min={0}
                 value={editPoints}
-                onChange={(event) => setEditPoints(Number(event.target.value))}
+                onChange={(event) => setEditPoints(event.target.value)}
               />
             </label>
             <button className="primary" onClick={handleUpdateStudent}>

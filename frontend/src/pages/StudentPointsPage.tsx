@@ -1,5 +1,5 @@
 import { Download } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   adjustStudentPoints,
@@ -69,21 +69,36 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
   const [selectedDetail, setSelectedDetail] =
     useState<StudentPointsDetail | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<Student | null>(null);
-  const [adjustAmount, setAdjustAmount] = useState(0);
+  // 字符串态：数字态下清空输入框等于填 0，而这里提交 0 会写一条无意义的
+  // 积分流水（还可能是 MANUAL_DEDUCT），必须让「空」和「0」区分开。
+  const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
+  const requestSeqRef = useRef(0);
 
   async function reload() {
+    const seq = requestSeqRef.current + 1;
+    requestSeqRef.current = seq;
     setLoading(true);
     try {
       const filters =
         selectedClass === "ALL"
           ? { keyword }
           : { keyword, className: selectedClass };
-      setStudents(await listStudents(token, filters));
+      const result = await listStudents(token, filters);
+      if (seq !== requestSeqRef.current) {
+        return;
+      }
+      setStudents(result);
+      setError("");
     } catch (err) {
+      if (seq !== requestSeqRef.current) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "加载学生失败");
     } finally {
-      setLoading(false);
+      if (seq === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -124,13 +139,23 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
     if (!adjustTarget) {
       return;
     }
+    if (adjustAmount.trim() === "") {
+      setError("请填写积分变动值（加分为正数，扣分为负数）");
+      return;
+    }
+    const amount = Number(adjustAmount);
+    if (!Number.isInteger(amount) || amount === 0) {
+      setError("积分变动必须是≠0 的整数");
+      return;
+    }
+    setError("");
     try {
       await adjustStudentPoints(token, adjustTarget.id, {
-        amount: adjustAmount,
+        amount,
         reason: adjustReason
       });
       setAdjustTarget(null);
-      setAdjustAmount(0);
+      setAdjustAmount("");
       setAdjustReason("");
       await reload();
       if (selectedDetail?.student.id === adjustTarget.id) {
@@ -307,7 +332,13 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
                     <button onClick={() => handleShowDetail(student)}>
                       明细
                     </button>
-                    <button onClick={() => setAdjustTarget(student)}>
+                    <button
+                      onClick={() => {
+                        setAdjustTarget(student);
+                        setAdjustAmount("");
+                        setAdjustReason("");
+                      }}
+                    >
                       改积分
                     </button>
                   </td>
@@ -327,7 +358,8 @@ export default function StudentPointsPage({ token }: StudentPointsPageProps) {
               <input
                 type="number"
                 value={adjustAmount}
-                onChange={(event) => setAdjustAmount(Number(event.target.value))}
+                onChange={(event) => setAdjustAmount(event.target.value)}
+                placeholder="加分填正数，扣分填负数"
               />
             </label>
             <label>

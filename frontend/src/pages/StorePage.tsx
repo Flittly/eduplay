@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ApiError,
   cloudDownloadPackage,
   cloudListStoreGames,
   cloudLoginLocal,
@@ -32,6 +33,32 @@ function readCloudUser(): User | null {
   } catch {
     return null;
   }
+}
+
+function versionSegments(version: string): number[] {
+  return version.split(".").map((part) => {
+    const value = Number.parseInt(part, 10);
+    return Number.isFinite(value) ? value : 0;
+  });
+}
+
+/**
+ * 云端版本是否比本机已装版本更新。
+ * 不能用 `!==` 判断：本地 1.2.0、云端 1.1.0 时也会算成「有更新」，
+ * 界面就会劝老师把新版本「更新」回旧版本。
+ */
+function isNewerVersion(candidate: string, current: string): boolean {
+  const next = versionSegments(candidate);
+  const prev = versionSegments(current);
+  const length = Math.max(next.length, prev.length);
+  for (let i = 0; i < length; i += 1) {
+    const left = next[i] ?? 0;
+    const right = prev[i] ?? 0;
+    if (left !== right) {
+      return left > right;
+    }
+  }
+  return false;
 }
 
 export default function StorePage({ token }: StorePageProps) {
@@ -95,12 +122,18 @@ export default function StorePage({ token }: StorePageProps) {
           installed: Boolean(local),
           installedVersion: local?.installedVersion ?? null,
           updateAvailable: Boolean(
-            local && local.installedVersion !== game.version
+            local && isNewerVersion(game.version, local.installedVersion)
           )
         };
       });
       setGames(merged);
+      setError("");
     } catch (err) {
+      // 云端令牌过期时，界面会停在「已登录」但商城永远是空的。
+      // 直接把云端登录态清掉，让用户回到登录卡片重新登。
+      if (handleCloudAuthError(err)) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "加载云端商城失败");
     } finally {
       setLoading(false);
@@ -178,6 +211,19 @@ export default function StorePage({ token }: StorePageProps) {
     setTagMenuOpen(false);
   }
 
+  /**
+   * 云端明确回 401/403 时清掉云端登录态并提示重新登录。
+   * 返回 true 表示已经处理，调用方不要再报普通错误。
+   */
+  function handleCloudAuthError(err: unknown): boolean {
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      handleCloudLogout();
+      setCloudError("云端登录已失效，请重新登录");
+      return true;
+    }
+    return false;
+  }
+
   async function handleRedeem() {
     if (!redeemGame || !cloudToken) {
       return;
@@ -190,6 +236,9 @@ export default function StorePage({ token }: StorePageProps) {
       setRedeemGame(null);
       await loadStore(await loadInstalled());
     } catch (err) {
+      if (handleCloudAuthError(err)) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "兑换失败");
     } finally {
       setRedeeming(false);
@@ -212,6 +261,9 @@ export default function StorePage({ token }: StorePageProps) {
       );
       await loadStore(await loadInstalled());
     } catch (err) {
+      if (handleCloudAuthError(err)) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "安装失败");
     } finally {
       setBusyGameCode(null);

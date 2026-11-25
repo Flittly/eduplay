@@ -121,11 +121,16 @@ export default function SettingsPage({ token, userRole }: SettingsPageProps) {
   }
 
   async function handleBallModeChange(next: boolean) {
+    const previous = ballMode;
+    setError("");
     setBallMode(next);
     try {
       await window.eduplayDesktop?.setDesktopSetting("ballMode", next);
       setNotice(next ? t("settings.desktop.ballOn") : t("settings.desktop.ballOff"));
     } catch {
+      // 写盘失败必须回滚：否则按钮停在「已开启」，但桌面上的球根本没出现，
+      // 老师会反复点同一下，越点越困惑。
+      setBallMode(previous);
       setError(t("settings.message.failed"));
     }
   }

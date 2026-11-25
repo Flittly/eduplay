@@ -39,6 +39,10 @@ public class PluginContentController {
         headers.setContentType(MediaType.parseMediaType(pluginFile.mediaType()));
         headers.setCacheControl(CacheControl.noStore());
         headers.setContentLength(bytes.length);
+        // 请求路径里带着主登录令牌（/plugin/{token}/...），游戏包一旦引用外链
+        // 字体或 CDN，默认的 Referer 会把整条带令牌的 URL 送给第三方。
+        // 前端 iframe 已加 referrerPolicy，这里再从响应头兜一层。
+        headers.set("Referrer-Policy", "no-referrer");
 
         return ResponseEntity.ok()
                 .headers(headers)

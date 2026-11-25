@@ -192,14 +192,20 @@ export default function GamePage({ token }: GamePageProps) {
         return;
       }
 
-      const target =
-        payload.studentId != null
-          ? selectedStudents.find(
-              (student) => student.id === payload.studentId
-            ) ?? null
-          : selectedStudents.length === 1
-            ? selectedStudents[0]
-            : null;
+      // 游戏回传的 id 可能来自 localStorage / data-* 属性，是字符串。
+      // 严格 === 比对会让 "12" 匹配不上 12，成绩就这么静默丢了，
+      // 界面还只说「学生不在本次选择名单中」，排查成本极高。
+      const requestedId =
+        payload.studentId == null ? null : Number(payload.studentId);
+      let target: Student | null = null;
+      if (requestedId != null) {
+        target = Number.isFinite(requestedId)
+          ? selectedStudents.find((student) => student.id === requestedId) ??
+            null
+          : null;
+      } else if (selectedStudents.length === 1) {
+        target = selectedStudents[0];
+      }
       if (!target) {
         setError("游戏返回的学生不在本次选择名单中，无法结算积分");
         return;
@@ -243,6 +249,7 @@ export default function GamePage({ token }: GamePageProps) {
             }
           ])
         );
+        setError("");
       } catch (err) {
         setError(err instanceof Error ? err.message : "积分结算失败");
       }
@@ -378,14 +385,16 @@ export default function GamePage({ token }: GamePageProps) {
         void submitComplete(message.payload as GameCompletePayload);
       } else if (message.type === "GAME_SESSION_COMPLETE") {
         const payload = message.payload as SessionCompletePayload | undefined;
+        // 同 submitComplete：id / 分数可能以字符串形式回传，先归一化再判断，
+        // 否则整行成绩会被静默过滤掉。
         const incoming: LoggedRound[] = (payload?.results ?? [])
           .filter(
             (item) =>
-              typeof item.studentId === "number" &&
-              typeof item.score === "number"
+              Number.isFinite(Number(item.studentId)) &&
+              Number.isFinite(Number(item.score))
           )
           .map((item) => ({
-            studentId: item.studentId as number,
+            studentId: Number(item.studentId),
             studentName:
               typeof item.studentName === "string"
                 ? (item.studentName as string)
@@ -397,7 +406,7 @@ export default function GamePage({ token }: GamePageProps) {
               typeof item.studentNo === "string"
                 ? (item.studentNo as string)
                 : "",
-            score: item.score as number,
+            score: Number(item.score),
             timeSeconds:
               typeof item.timeSeconds === "number"
                 ? (item.timeSeconds as number)
@@ -600,7 +609,9 @@ export default function GamePage({ token }: GamePageProps) {
 
       {sessionDone ? (
         <section className="result-card">
-          <h2>拼图活动完成</h2>
+          {/* 这是通用结算页，所有游戏共用；写死「拼图」会让数学/英语游戏
+              的结算页出现不相干的活动名。 */}
+          <h2>{installedGame.name} · 本轮完成</h2>
           <p>
             共 {roundLogs.length} 名学生完成，按用时从少到多排列：
           </p>
@@ -625,9 +636,9 @@ export default function GamePage({ token }: GamePageProps) {
                     <td>{formatTime(round.timeSeconds)}</td>
                     <td>{round.score}</td>
                     <td>
-                      {round.totalPoints != null
-                        ? round.totalPoints
-                        : "结算中…"}
+                      {/* 连局模式下游戏只回传本局得分，平台拿不到最新总积分。
+                          原来写「结算中…」会永久停留，看着像卡死。 */}
+                      {round.totalPoints != null ? round.totalPoints : "-"}
                     </td>
                   </tr>
                 ))}
@@ -661,6 +672,9 @@ export default function GamePage({ token }: GamePageProps) {
             title={installedGame.name}
             src={playUrl}
             allowFullScreen
+            /* 令牌就在 src 里，游戏包一旦引用外链字体/CDN，
+               Referer 会把整条带令牌的 URL 送到第三方站点。 */
+            referrerPolicy="no-referrer"
             style={{
               width: "100%",
               height: isFullscreen
