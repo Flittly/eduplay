@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { loginLocal, registerLocal } from "../api";
 import {
   clearSavedCredentials,
@@ -25,7 +25,8 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit() {
+  async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     setError("");
     setSubmitting(true);
     try {
@@ -88,7 +89,9 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
       </section>
 
       <section className="auth-form-side">
-        <div className="auth-form-card">
+        {/* 用真表单而不是 div：老师习惯输完密码直接回车，
+            没有 form 时回车什么都不发生。class 不变，布局零影响。 */}
+        <form className="auth-form-card" onSubmit={handleSubmit}>
           <div className="auth-form-header">
             <p className="auth-welcome">欢迎使用</p>
             <h2>{mode === "login" ? "本地登录" : "本地注册"}</h2>
@@ -96,12 +99,14 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
           <div className="login-tabs">
             <button
+              type="button"
               className={mode === "login" ? "active" : ""}
               onClick={() => setMode("login")}
             >
               登录
             </button>
             <button
+              type="button"
               className={mode === "register" ? "active" : ""}
               onClick={() => setMode("register")}
             >
@@ -202,9 +207,9 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
           {error && <div className="error">{error}</div>}
 
           <button
+            type="submit"
             className="primary auth-submit"
             disabled={submitting}
-            onClick={handleSubmit}
           >
             {submitting
               ? "处理中..."
@@ -212,7 +217,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
                 ? "登录"
                 : "注册"}
           </button>
-        </div>
+        </form>
       </section>
     </div>
   );

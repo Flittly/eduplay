@@ -185,12 +185,27 @@ export default function DashboardPage({ token }: DashboardPageProps) {
 
       <div className="game-grid">
         {filteredGames.length === 0 ? (
-          <div className="empty-state">
-            <p>你还没有安装任何游戏。</p>
-            <Link className="primary button-link" to="/store">
-              前往游戏商城
-            </Link>
-          </div>
+          games.length === 0 ? (
+            <div className="empty-state">
+              <p>你还没有安装任何游戏。</p>
+              <Link className="primary button-link" to="/store">
+                前往游戏商城
+              </Link>
+            </div>
+          ) : (
+            /* 已经装了游戏、只是标签筛空了：原来这里仍显示「还没有安装任何游戏」，
+               老师会以为游戏丢了，实际是要清筛选。 */
+            <div className="empty-state">
+              <p>标签「{selectedTag}」下没有已安装的游戏。</p>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => setSelectedTag("")}
+              >
+                清除筛选
+              </button>
+            </div>
+          )
         ) : (
           filteredGames.map((game) => (
             <article
